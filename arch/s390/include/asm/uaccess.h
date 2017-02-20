@@ -37,14 +37,14 @@
 #define get_ds()        (KERNEL_DS)
 #define get_fs()        (current->thread.mm_segment)
 
-#define set_fs(x) \
-({									\
+#define set_fs(x)							\
+{									\
 	unsigned long __pto;						\
 	current->thread.mm_segment = (x);				\
 	__pto = current->thread.mm_segment.ar4 ?			\
 		S390_lowcore.user_asce : S390_lowcore.kernel_asce;	\
 	__ctl_load(__pto, 7, 7);					\
-})
+}
 
 #define segment_eq(a,b) ((a).ar4 == (b).ar4)
 
@@ -266,28 +266,28 @@ int __put_user_bad(void) __attribute__((noreturn));
 	__chk_user_ptr(ptr);					\
 	switch (sizeof(*(ptr))) {				\
 	case 1: {						\
-		unsigned char __x;				\
+		unsigned char __x = 0;				\
 		__gu_err = __get_user_fn(&__x, ptr,		\
 					 sizeof(*(ptr)));	\
 		(x) = *(__force __typeof__(*(ptr)) *) &__x;	\
 		break;						\
 	};							\
 	case 2: {						\
-		unsigned short __x;				\
+		unsigned short __x = 0;				\
 		__gu_err = __get_user_fn(&__x, ptr,		\
 					 sizeof(*(ptr)));	\
 		(x) = *(__force __typeof__(*(ptr)) *) &__x;	\
 		break;						\
 	};							\
 	case 4: {						\
-		unsigned int __x;				\
+		unsigned int __x = 0;				\
 		__gu_err = __get_user_fn(&__x, ptr,		\
 					 sizeof(*(ptr)));	\
 		(x) = *(__force __typeof__(*(ptr)) *) &__x;	\
 		break;						\
 	};							\
 	case 8: {						\
-		unsigned long long __x;				\
+		unsigned long long __x = 0;			\
 		__gu_err = __get_user_fn(&__x, ptr,		\
 					 sizeof(*(ptr)));	\
 		(x) = *(__force __typeof__(*(ptr)) *) &__x;	\
