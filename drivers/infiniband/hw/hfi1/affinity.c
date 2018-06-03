@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2015, 2016 Intel Corporation.
+ * Copyright(c) 2015 - 2017 Intel Corporation.
  *
  * This file is provided under a dual BSD/GPLv2 license.  When using or
  * redistributing this file, you may do so under either license.
@@ -335,10 +335,10 @@ static void hfi1_update_sdma_affinity(struct hfi1_msix_entry *msix, int cpu)
 	sde->cpu = cpu;
 	cpumask_clear(&msix->mask);
 	cpumask_set_cpu(cpu, &msix->mask);
-	dd_dev_dbg(dd, "IRQ vector: %u, type %s engine %u -> cpu: %d\n",
-		   msix->msix.vector, irq_type_names[msix->type],
+	dd_dev_dbg(dd, "IRQ: %u, type %s engine %u -> cpu: %d\n",
+		   msix->irq, irq_type_names[msix->type],
 		   sde->this_idx, cpu);
-	irq_set_affinity_hint(msix->msix.vector, &msix->mask);
+	irq_set_affinity_hint(msix->irq, &msix->mask);
 
 	/*
 	 * Set the new cpu in the hfi1_affinity_node and clean
@@ -387,7 +387,7 @@ static void hfi1_setup_sdma_notifier(struct hfi1_msix_entry *msix)
 {
 	struct irq_affinity_notify *notify = &msix->notify;
 
-	notify->irq = msix->msix.vector;
+	notify->irq = msix->irq;
 	notify->notify = hfi1_irq_notifier_notify;
 	notify->release = hfi1_irq_notifier_release;
 
@@ -412,7 +412,6 @@ static void hfi1_cleanup_sdma_notifier(struct hfi1_msix_entry *msix)
 static int get_irq_affinity(struct hfi1_devdata *dd,
 			    struct hfi1_msix_entry *msix)
 {
-	int ret;
 	cpumask_var_t diff;
 	struct hfi1_affinity_node *entry;
 	struct cpu_mask_set *set = NULL;
@@ -423,10 +422,6 @@ static int get_irq_affinity(struct hfi1_devdata *dd,
 
 	extra[0] = '\0';
 	cpumask_clear(&msix->mask);
-
-	ret = zalloc_cpumask_var(&diff, GFP_KERNEL);
-	if (!ret)
-		return -ENOMEM;
 
 	entry = node_affinity_lookup(dd->node);
 
@@ -458,6 +453,9 @@ static int get_irq_affinity(struct hfi1_devdata *dd,
 	 * finds its CPU here.
 	 */
 	if (cpu == -1 && set) {
+		if (!zalloc_cpumask_var(&diff, GFP_KERNEL))
+			return -ENOMEM;
+
 		if (cpumask_equal(&set->mask, &set->used)) {
 			/*
 			 * We've used up all the CPUs, bump up the generation
@@ -469,20 +467,21 @@ static int get_irq_affinity(struct hfi1_devdata *dd,
 		cpumask_andnot(diff, &set->mask, &set->used);
 		cpu = cpumask_first(diff);
 		cpumask_set_cpu(cpu, &set->used);
+
+		free_cpumask_var(diff);
 	}
 
 	cpumask_set_cpu(cpu, &msix->mask);
-	dd_dev_info(dd, "IRQ vector: %u, type %s %s -> cpu: %d\n",
-		    msix->msix.vector, irq_type_names[msix->type],
+	dd_dev_info(dd, "IRQ: %u, type %s %s -> cpu: %d\n",
+		    msix->irq, irq_type_names[msix->type],
 		    extra, cpu);
-	irq_set_affinity_hint(msix->msix.vector, &msix->mask);
+	irq_set_affinity_hint(msix->irq, &msix->mask);
 
 	if (msix->type == IRQ_SDMA) {
 		sde->cpu = cpu;
 		hfi1_setup_sdma_notifier(msix);
 	}
 
-	free_cpumask_var(diff);
 	return 0;
 }
 
@@ -533,7 +532,7 @@ void hfi1_put_irq_affinity(struct hfi1_devdata *dd,
 		}
 	}
 
-	irq_set_affinity_hint(msix->msix.vector, NULL);
+	irq_set_affinity_hint(msix->irq, NULL);
 	cpumask_clear(&msix->mask);
 	mutex_unlock(&node_affinity.lock);
 }

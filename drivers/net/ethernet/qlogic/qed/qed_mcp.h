@@ -53,15 +53,25 @@ struct qed_mcp_link_pause_params {
 	bool    forced_tx;
 };
 
+enum qed_mcp_eee_mode {
+	QED_MCP_EEE_DISABLED,
+	QED_MCP_EEE_ENABLED,
+	QED_MCP_EEE_UNSUPPORTED
+};
+
 struct qed_mcp_link_params {
-	struct qed_mcp_link_speed_params	speed;
-	struct qed_mcp_link_pause_params	pause;
-	u32				     loopback_mode;
+	struct qed_mcp_link_speed_params speed;
+	struct qed_mcp_link_pause_params pause;
+	u32 loopback_mode;
+	struct qed_link_eee_params eee;
 };
 
 struct qed_mcp_link_capabilities {
 	u32 speed_capabilities;
 	bool default_speed_autoneg;
+	enum qed_mcp_eee_mode default_eee;
+	u32 eee_lpi_timer;
+	u8 eee_speed_caps;
 };
 
 struct qed_mcp_link_state {
@@ -102,6 +112,9 @@ struct qed_mcp_link_state {
 	u8      partner_adv_pause;
 
 	bool    sfp_tx_fault;
+	bool    eee_active;
+	u8      eee_adv_caps;
+	u8      eee_lp_adv_caps;
 };
 
 struct qed_mcp_function_info {
@@ -430,6 +443,40 @@ int qed_mcp_set_led(struct qed_hwfn *p_hwfn,
  */
 int qed_mcp_nvm_read(struct qed_dev *cdev, u32 addr, u8 *p_buf, u32 len);
 
+/**
+ * @brief Write to nvm
+ *
+ *  @param cdev
+ *  @param addr - nvm offset
+ *  @param cmd - nvm command
+ *  @param p_buf - nvm write buffer
+ *  @param len - buffer len
+ *
+ * @return int - 0 - operation was successful.
+ */
+int qed_mcp_nvm_write(struct qed_dev *cdev,
+		      u32 cmd, u32 addr, u8 *p_buf, u32 len);
+
+/**
+ * @brief Put file begin
+ *
+ *  @param cdev
+ *  @param addr - nvm offset
+ *
+ * @return int - 0 - operation was successful.
+ */
+int qed_mcp_nvm_put_file_begin(struct qed_dev *cdev, u32 addr);
+
+/**
+ * @brief Check latest response
+ *
+ *  @param cdev
+ *  @param p_buf - nvm write buffer
+ *
+ * @return int - 0 - operation was successful.
+ */
+int qed_mcp_nvm_resp(struct qed_dev *cdev, u8 *p_buf);
+
 struct qed_nvm_image_att {
 	u32 start_addr;
 	u32 length;
@@ -483,9 +530,9 @@ int qed_mcp_bist_clock_test(struct qed_hwfn *p_hwfn,
  *
  * @return int - 0 - operation was successful.
  */
-int qed_mcp_bist_nvm_test_get_num_images(struct qed_hwfn *p_hwfn,
-					 struct qed_ptt *p_ptt,
-					 u32 *num_images);
+int qed_mcp_bist_nvm_get_num_images(struct qed_hwfn *p_hwfn,
+				    struct qed_ptt *p_ptt,
+				    u32 *num_images);
 
 /**
  * @brief Bist nvm test - get image attributes by index
@@ -497,10 +544,10 @@ int qed_mcp_bist_nvm_test_get_num_images(struct qed_hwfn *p_hwfn,
  *
  * @return int - 0 - operation was successful.
  */
-int qed_mcp_bist_nvm_test_get_image_att(struct qed_hwfn *p_hwfn,
-					struct qed_ptt *p_ptt,
-					struct bist_nvm_image_att *p_image_att,
-					u32 image_index);
+int qed_mcp_bist_nvm_get_image_att(struct qed_hwfn *p_hwfn,
+				   struct qed_ptt *p_ptt,
+				   struct bist_nvm_image_att *p_image_att,
+				   u32 image_index);
 
 /* Using hwfn number (and not pf_num) is required since in CMT mode,
  * same pf_num may be used by two different hwfn
@@ -546,6 +593,9 @@ struct qed_mcp_info {
 	u8					*mfw_mb_shadow;
 	u16					mfw_mb_length;
 	u32					mcp_hist;
+
+	/* Capabilties negotiated with the MFW */
+	u32					capabilities;
 };
 
 struct qed_mcp_mb_params {
@@ -925,5 +975,28 @@ void qed_mcp_resc_lock_default_init(struct qed_resc_lock_params *p_lock,
 				    struct qed_resc_unlock_params *p_unlock,
 				    enum qed_resc_lock
 				    resource, bool b_is_permanent);
+/**
+ * @brief Learn of supported MFW features; To be done during early init
+ *
+ * @param p_hwfn
+ * @param p_ptt
+ */
+int qed_mcp_get_capabilities(struct qed_hwfn *p_hwfn, struct qed_ptt *p_ptt);
+
+/**
+ * @brief Inform MFW of set of features supported by driver. Should be done
+ * inside the content of the LOAD_REQ.
+ *
+ * @param p_hwfn
+ * @param p_ptt
+ */
+int qed_mcp_set_capabilities(struct qed_hwfn *p_hwfn, struct qed_ptt *p_ptt);
+
+/**
+ * @brief Populate the nvm info shadow in the given hardware function
+ *
+ * @param p_hwfn
+ */
+int qed_mcp_nvm_info_populate(struct qed_hwfn *p_hwfn);
 
 #endif

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * llvm C frontend for perf. Support dynamically compile C file
  *
@@ -8,6 +9,7 @@
  * Copyright (C) 2016 Huawei Inc.
  */
 
+#include "clang/Basic/Version.h"
 #include "clang/CodeGen/CodeGenAction.h"
 #include "clang/Frontend/CompilerInvocation.h"
 #include "clang/Frontend/CompilerInstance.h"
@@ -57,7 +59,8 @@ createCompilerInvocation(llvm::opt::ArgStringList CFlags, StringRef& Path,
 
 	FrontendOptions& Opts = CI->getFrontendOpts();
 	Opts.Inputs.clear();
-	Opts.Inputs.emplace_back(Path, IK_C);
+	Opts.Inputs.emplace_back(Path,
+			FrontendOptions::getInputKindForExtension("c"));
 	return CI;
 }
 
@@ -70,10 +73,17 @@ getModuleFromSource(llvm::opt::ArgStringList CFlags,
 
 	Clang.setVirtualFileSystem(&*VFS);
 
+#if CLANG_VERSION_MAJOR < 4
 	IntrusiveRefCntPtr<CompilerInvocation> CI =
 		createCompilerInvocation(std::move(CFlags), Path,
 					 Clang.getDiagnostics());
 	Clang.setInvocation(&*CI);
+#else
+	std::shared_ptr<CompilerInvocation> CI(
+		createCompilerInvocation(std::move(CFlags), Path,
+					 Clang.getDiagnostics()));
+	Clang.setInvocation(CI);
+#endif
 
 	std::unique_ptr<CodeGenAction> Act(new EmitLLVMOnlyAction(&*LLVMCtx));
 	if (!Clang.ExecuteAction(*Act))

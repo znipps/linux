@@ -1780,7 +1780,7 @@ static ssize_t ctxid_masks_store(struct device *dev,
 		 */
 		for (j = 0; j < 8; j++) {
 			if (maskbyte & 1)
-				config->ctxid_pid[i] &= ~(0xFF << (j * 8));
+				config->ctxid_pid[i] &= ~(0xFFUL << (j * 8));
 			maskbyte >>= 1;
 		}
 		/* Select the next ctxid comparator mask value */
@@ -1963,7 +1963,7 @@ static ssize_t vmid_masks_store(struct device *dev,
 		 */
 		for (j = 0; j < 8; j++) {
 			if (maskbyte & 1)
-				config->vmid_val[i] &= ~(0xFF << (j * 8));
+				config->vmid_val[i] &= ~(0xFFUL << (j * 8));
 			maskbyte >>= 1;
 		}
 		/* Select the next vmid comparator mask value */
@@ -2066,23 +2066,23 @@ static u32 etmv4_cross_read(const struct device *dev, u32 offset)
 	return reg.data;
 }
 
-#define coresight_etm4x_simple_func(name, offset)			\
-	coresight_simple_func(struct etmv4_drvdata, NULL, name, offset)
+#define coresight_etm4x_reg(name, offset)			\
+	coresight_simple_reg32(struct etmv4_drvdata, name, offset)
 
 #define coresight_etm4x_cross_read(name, offset)			\
 	coresight_simple_func(struct etmv4_drvdata, etmv4_cross_read,	\
 			      name, offset)
 
-coresight_etm4x_simple_func(trcpdcr, TRCPDCR);
-coresight_etm4x_simple_func(trcpdsr, TRCPDSR);
-coresight_etm4x_simple_func(trclsr, TRCLSR);
-coresight_etm4x_simple_func(trcauthstatus, TRCAUTHSTATUS);
-coresight_etm4x_simple_func(trcdevid, TRCDEVID);
-coresight_etm4x_simple_func(trcdevtype, TRCDEVTYPE);
-coresight_etm4x_simple_func(trcpidr0, TRCPIDR0);
-coresight_etm4x_simple_func(trcpidr1, TRCPIDR1);
-coresight_etm4x_simple_func(trcpidr2, TRCPIDR2);
-coresight_etm4x_simple_func(trcpidr3, TRCPIDR3);
+coresight_etm4x_reg(trcpdcr, TRCPDCR);
+coresight_etm4x_reg(trcpdsr, TRCPDSR);
+coresight_etm4x_reg(trclsr, TRCLSR);
+coresight_etm4x_reg(trcauthstatus, TRCAUTHSTATUS);
+coresight_etm4x_reg(trcdevid, TRCDEVID);
+coresight_etm4x_reg(trcdevtype, TRCDEVTYPE);
+coresight_etm4x_reg(trcpidr0, TRCPIDR0);
+coresight_etm4x_reg(trcpidr1, TRCPIDR1);
+coresight_etm4x_reg(trcpidr2, TRCPIDR2);
+coresight_etm4x_reg(trcpidr3, TRCPIDR3);
 coresight_etm4x_cross_read(trcoslsr, TRCOSLSR);
 coresight_etm4x_cross_read(trcconfig, TRCCONFIGR);
 coresight_etm4x_cross_read(trctraceid, TRCTRACEIDR);

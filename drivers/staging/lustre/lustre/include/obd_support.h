@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * GPL HEADER START
  *
@@ -36,9 +37,9 @@
 #include <linux/slab.h>
 #include <linux/sched/signal.h>
 
-#include "../../include/linux/libcfs/libcfs.h"
-#include "lustre_compat.h"
-#include "lprocfs_status.h"
+#include <linux/libcfs/libcfs.h>
+#include <lustre_compat.h>
+#include <lprocfs_status.h>
 
 /* global variables */
 extern unsigned int obd_debug_peer_on_timeout;
@@ -515,7 +516,7 @@ extern char obd_jobid_var[];
 #define POISON_PTR(ptr)  ((void)0)
 #else
 #define POISON(ptr, c, s) memset(ptr, c, s)
-#define POISON_PTR(ptr)  (ptr) = (void *)0xdeadbeef
+#define POISON_PTR(ptr)  ((ptr) = (void *)0xdeadbeef)
 #endif
 
 #ifdef POISON_BULK

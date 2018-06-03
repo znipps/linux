@@ -248,7 +248,7 @@ static int ip_finish_output_gso(struct net *net, struct sock *sk,
 
 	/* common case: seglen is <= mtu
 	 */
-	if (skb_gso_validate_mtu(skb, mtu))
+	if (skb_gso_validate_network_len(skb, mtu))
 		return ip_finish_output2(net, sk, skb);
 
 	/* Slowpath -  GSO segment length exceeds the egress MTU.
@@ -853,61 +853,6 @@ csum_page(struct page *page, int offset, int copy)
 	return csum;
 }
 
-static inline int ip_ufo_append_data(struct sock *sk,
-			struct sk_buff_head *queue,
-			int getfrag(void *from, char *to, int offset, int len,
-			       int odd, struct sk_buff *skb),
-			void *from, int length, int hh_len, int fragheaderlen,
-			int transhdrlen, int maxfraglen, unsigned int flags)
-{
-	struct sk_buff *skb;
-	int err;
-
-	/* There is support for UDP fragmentation offload by network
-	 * device, so create one single skb packet containing complete
-	 * udp datagram
-	 */
-	skb = skb_peek_tail(queue);
-	if (!skb) {
-		skb = sock_alloc_send_skb(sk,
-			hh_len + fragheaderlen + transhdrlen + 20,
-			(flags & MSG_DONTWAIT), &err);
-
-		if (!skb)
-			return err;
-
-		/* reserve space for Hardware header */
-		skb_reserve(skb, hh_len);
-
-		/* create space for UDP/IP header */
-		skb_put(skb, fragheaderlen + transhdrlen);
-
-		/* initialize network header pointer */
-		skb_reset_network_header(skb);
-
-		/* initialize protocol header pointer */
-		skb->transport_header = skb->network_header + fragheaderlen;
-
-		skb->csum = 0;
-
-		if (flags & MSG_CONFIRM)
-			skb_set_dst_pending_confirm(skb, 1);
-
-		__skb_queue_tail(queue, skb);
-	} else if (skb_is_gso(skb)) {
-		goto append;
-	}
-
-	skb->ip_summed = CHECKSUM_PARTIAL;
-	/* specify the length of each IP datagram fragment */
-	skb_shinfo(skb)->gso_size = maxfraglen - fragheaderlen;
-	skb_shinfo(skb)->gso_type = SKB_GSO_UDP;
-
-append:
-	return skb_append_datato_frags(sk, skb, getfrag, from,
-				       (length - transhdrlen));
-}
-
 static int __ip_append_data(struct sock *sk,
 			    struct flowi4 *fl4,
 			    struct sk_buff_head *queue,
@@ -931,6 +876,7 @@ static int __ip_append_data(struct sock *sk,
 	unsigned int maxfraglen, fragheaderlen, maxnonfragsize;
 	int csummode = CHECKSUM_NONE;
 	struct rtable *rt = (struct rtable *)cork->dst;
+	unsigned int wmem_alloc_delta = 0;
 	u32 tskey = 0;
 
 	skb = skb_peek_tail(queue);
@@ -965,19 +911,6 @@ static int __ip_append_data(struct sock *sk,
 		csummode = CHECKSUM_PARTIAL;
 
 	cork->length += length;
-	if ((skb && skb_is_gso(skb)) ||
-	    (((length + (skb ? skb->len : fragheaderlen)) > mtu) &&
-	    (skb_queue_len(queue) <= 1) &&
-	    (sk->sk_protocol == IPPROTO_UDP) &&
-	    (rt->dst.dev->features & NETIF_F_UFO) && !dst_xfrm(&rt->dst) &&
-	    (sk->sk_type == SOCK_DGRAM) && !sk->sk_no_check_tx)) {
-		err = ip_ufo_append_data(sk, queue, getfrag, from, length,
-					 hh_len, fragheaderlen, transhdrlen,
-					 maxfraglen, flags);
-		if (err)
-			goto error;
-		return 0;
-	}
 
 	/* So, what's going on in the loop below?
 	 *
@@ -1039,11 +972,10 @@ alloc_new_skb:
 						(flags & MSG_DONTWAIT), &err);
 			} else {
 				skb = NULL;
-				if (refcount_read(&sk->sk_wmem_alloc) <=
+				if (refcount_read(&sk->sk_wmem_alloc) + wmem_alloc_delta <=
 				    2 * sk->sk_sndbuf)
-					skb = sock_wmalloc(sk,
-							   alloclen + hh_len + 15, 1,
-							   sk->sk_allocation);
+					skb = alloc_skb(alloclen + hh_len + 15,
+							sk->sk_allocation);
 				if (unlikely(!skb))
 					err = -ENOBUFS;
 			}
@@ -1101,6 +1033,11 @@ alloc_new_skb:
 			/*
 			 * Put the packet on the pending queue.
 			 */
+			if (!skb->destructor) {
+				skb->destructor = sock_wfree;
+				skb->sk = sk;
+				wmem_alloc_delta += skb->truesize;
+			}
 			__skb_queue_tail(queue, skb);
 			continue;
 		}
@@ -1108,7 +1045,8 @@ alloc_new_skb:
 		if (copy > length)
 			copy = length;
 
-		if (!(rt->dst.dev->features&NETIF_F_SG)) {
+		if (!(rt->dst.dev->features&NETIF_F_SG) &&
+		    skb_tailroom(skb) >= copy) {
 			unsigned int off;
 
 			off = skb->len;
@@ -1147,12 +1085,14 @@ alloc_new_skb:
 			skb->len += copy;
 			skb->data_len += copy;
 			skb->truesize += copy;
-			refcount_add(copy, &sk->sk_wmem_alloc);
+			wmem_alloc_delta += copy;
 		}
 		offset += copy;
 		length -= copy;
 	}
 
+	if (wmem_alloc_delta)
+		refcount_add(wmem_alloc_delta, &sk->sk_wmem_alloc);
 	return 0;
 
 error_efault:
@@ -1160,6 +1100,7 @@ error_efault:
 error:
 	cork->length -= length;
 	IP_INC_STATS(sock_net(sk), IPSTATS_MIB_OUTDISCARDS);
+	refcount_add(wmem_alloc_delta, &sk->sk_wmem_alloc);
 	return err;
 }
 
@@ -1168,6 +1109,10 @@ static int ip_setup_cork(struct sock *sk, struct inet_cork *cork,
 {
 	struct ip_options_rcu *opt;
 	struct rtable *rt;
+
+	rt = *rtp;
+	if (unlikely(!rt))
+		return -EFAULT;
 
 	/*
 	 * setup for corking.
@@ -1184,9 +1129,7 @@ static int ip_setup_cork(struct sock *sk, struct inet_cork *cork,
 		cork->flags |= IPCORK_OPT;
 		cork->addr = ipc->addr;
 	}
-	rt = *rtp;
-	if (unlikely(!rt))
-		return -EFAULT;
+
 	/*
 	 * We steal reference to this route, caller should not release it
 	 */
@@ -1288,28 +1231,14 @@ ssize_t	ip_append_page(struct sock *sk, struct flowi4 *fl4, struct page *page,
 	if (!skb)
 		return -EINVAL;
 
-	if ((size + skb->len > mtu) &&
-	    (skb_queue_len(&sk->sk_write_queue) == 1) &&
-	    (sk->sk_protocol == IPPROTO_UDP) &&
-	    (rt->dst.dev->features & NETIF_F_UFO)) {
-		if (skb->ip_summed != CHECKSUM_PARTIAL)
-			return -EOPNOTSUPP;
-
-		skb_shinfo(skb)->gso_size = mtu - fragheaderlen;
-		skb_shinfo(skb)->gso_type = SKB_GSO_UDP;
-	}
 	cork->length += size;
 
 	while (size > 0) {
-		if (skb_is_gso(skb)) {
-			len = size;
-		} else {
+		/* Check if the remaining data fits into current packet. */
+		len = mtu - skb->len;
+		if (len < size)
+			len = maxfraglen - skb->len;
 
-			/* Check if the remaining data fits into current packet. */
-			len = mtu - skb->len;
-			if (len < size)
-				len = maxfraglen - skb->len;
-		}
 		if (len <= 0) {
 			struct sk_buff *skb_prev;
 			int alloclen;
@@ -1603,7 +1532,7 @@ void ip_send_unicast_reply(struct sock *sk, struct sk_buff *skb,
 	int err;
 	int oif;
 
-	if (__ip_options_echo(&replyopts.opt.opt, skb, sopt))
+	if (__ip_options_echo(net, &replyopts.opt.opt, skb, sopt))
 		return;
 
 	ipc.addr = daddr;

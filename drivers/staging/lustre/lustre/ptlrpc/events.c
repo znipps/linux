@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * GPL HEADER START
  *
@@ -32,14 +33,14 @@
 
 #define DEBUG_SUBSYSTEM S_RPC
 
-#include "../../include/linux/libcfs/libcfs.h"
+#include <linux/libcfs/libcfs.h>
 # ifdef __mips64__
 #  include <linux/kernel.h>
 # endif
 
-#include "../include/obd_class.h"
-#include "../include/lustre_net.h"
-#include "../include/lustre_sec.h"
+#include <obd_class.h>
+#include <lustre_net.h>
+#include <lustre_sec.h>
 #include "ptlrpc_internal.h"
 
 struct lnet_handle_eq ptlrpc_eq_h;
@@ -489,8 +490,6 @@ int ptlrpc_uuid_to_peer(struct obd_uuid *uuid,
 
 static void ptlrpc_ni_fini(void)
 {
-	wait_queue_head_t waitq;
-	struct l_wait_info lwi;
 	int rc;
 	int retries;
 
@@ -514,10 +513,7 @@ static void ptlrpc_ni_fini(void)
 			if (retries != 0)
 				CWARN("Event queue still busy\n");
 
-			/* Wait for a bit */
-			init_waitqueue_head(&waitq);
-			lwi = LWI_TIMEOUT(cfs_time_seconds(2), NULL, NULL);
-			l_wait_event(waitq, 0, &lwi);
+			schedule_timeout_uninterruptible(2 * HZ);
 			break;
 		}
 	}

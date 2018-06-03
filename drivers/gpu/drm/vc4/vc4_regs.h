@@ -122,38 +122,9 @@
 #define V3D_VPMBASE  0x00504
 #define V3D_PCTRC    0x00670
 #define V3D_PCTRE    0x00674
-#define V3D_PCTR0    0x00680
-#define V3D_PCTRS0   0x00684
-#define V3D_PCTR1    0x00688
-#define V3D_PCTRS1   0x0068c
-#define V3D_PCTR2    0x00690
-#define V3D_PCTRS2   0x00694
-#define V3D_PCTR3    0x00698
-#define V3D_PCTRS3   0x0069c
-#define V3D_PCTR4    0x006a0
-#define V3D_PCTRS4   0x006a4
-#define V3D_PCTR5    0x006a8
-#define V3D_PCTRS5   0x006ac
-#define V3D_PCTR6    0x006b0
-#define V3D_PCTRS6   0x006b4
-#define V3D_PCTR7    0x006b8
-#define V3D_PCTRS7   0x006bc
-#define V3D_PCTR8    0x006c0
-#define V3D_PCTRS8   0x006c4
-#define V3D_PCTR9    0x006c8
-#define V3D_PCTRS9   0x006cc
-#define V3D_PCTR10   0x006d0
-#define V3D_PCTRS10  0x006d4
-#define V3D_PCTR11   0x006d8
-#define V3D_PCTRS11  0x006dc
-#define V3D_PCTR12   0x006e0
-#define V3D_PCTRS12  0x006e4
-#define V3D_PCTR13   0x006e8
-#define V3D_PCTRS13  0x006ec
-#define V3D_PCTR14   0x006f0
-#define V3D_PCTRS14  0x006f4
-#define V3D_PCTR15   0x006f8
-#define V3D_PCTRS15  0x006fc
+# define V3D_PCTRE_EN	BIT(31)
+#define V3D_PCTR(x)  (0x00680 + ((x) * 8))
+#define V3D_PCTRS(x) (0x00684 + ((x) * 8))
 #define V3D_DBGE     0x00f00
 #define V3D_FDBGO    0x00f04
 #define V3D_FDBGB    0x00f08
@@ -561,16 +532,129 @@
 # define VC4_HDMI_VERTB_VBP_MASK		VC4_MASK(8, 0)
 # define VC4_HDMI_VERTB_VBP_SHIFT		0
 
+#define VC4_HDMI_CEC_CNTRL_1			0x0e8
+/* Set when the transmission has ended. */
+# define VC4_HDMI_CEC_TX_EOM			BIT(31)
+/* If set, transmission was acked on the 1st or 2nd attempt (only one
+ * retry is attempted).  If in continuous mode, this means TX needs to
+ * be filled if !TX_EOM.
+ */
+# define VC4_HDMI_CEC_TX_STATUS_GOOD		BIT(30)
+# define VC4_HDMI_CEC_RX_EOM			BIT(29)
+# define VC4_HDMI_CEC_RX_STATUS_GOOD		BIT(28)
+/* Number of bytes received for the message. */
+# define VC4_HDMI_CEC_REC_WRD_CNT_MASK		VC4_MASK(27, 24)
+# define VC4_HDMI_CEC_REC_WRD_CNT_SHIFT		24
+/* Sets continuous receive mode.  Generates interrupt after each 8
+ * bytes to signal that RX_DATA should be consumed, and at RX_EOM.
+ *
+ * If disabled, maximum 16 bytes will be received (including header),
+ * and interrupt at RX_EOM.  Later bytes will be acked but not put
+ * into the RX_DATA.
+ */
+# define VC4_HDMI_CEC_RX_CONTINUE		BIT(23)
+# define VC4_HDMI_CEC_TX_CONTINUE		BIT(22)
+/* Set this after a CEC interrupt. */
+# define VC4_HDMI_CEC_CLEAR_RECEIVE_OFF		BIT(21)
+/* Starts a TX.  Will wait for appropriate idel time before CEC
+ * activity. Must be cleared in between transmits.
+ */
+# define VC4_HDMI_CEC_START_XMIT_BEGIN		BIT(20)
+# define VC4_HDMI_CEC_MESSAGE_LENGTH_MASK	VC4_MASK(19, 16)
+# define VC4_HDMI_CEC_MESSAGE_LENGTH_SHIFT	16
+/* Device's CEC address */
+# define VC4_HDMI_CEC_ADDR_MASK			VC4_MASK(15, 12)
+# define VC4_HDMI_CEC_ADDR_SHIFT		12
+/* Divides off of HSM clock to generate CEC bit clock. */
+/* With the current defaults the CEC bit clock is 40 kHz = 25 usec */
+# define VC4_HDMI_CEC_DIV_CLK_CNT_MASK		VC4_MASK(11, 0)
+# define VC4_HDMI_CEC_DIV_CLK_CNT_SHIFT		0
+
+/* Set these fields to how many bit clock cycles get to that many
+ * microseconds.
+ */
+#define VC4_HDMI_CEC_CNTRL_2			0x0ec
+# define VC4_HDMI_CEC_CNT_TO_1500_US_MASK	VC4_MASK(30, 24)
+# define VC4_HDMI_CEC_CNT_TO_1500_US_SHIFT	24
+# define VC4_HDMI_CEC_CNT_TO_1300_US_MASK	VC4_MASK(23, 17)
+# define VC4_HDMI_CEC_CNT_TO_1300_US_SHIFT	17
+# define VC4_HDMI_CEC_CNT_TO_800_US_MASK	VC4_MASK(16, 11)
+# define VC4_HDMI_CEC_CNT_TO_800_US_SHIFT	11
+# define VC4_HDMI_CEC_CNT_TO_600_US_MASK	VC4_MASK(10, 5)
+# define VC4_HDMI_CEC_CNT_TO_600_US_SHIFT	5
+# define VC4_HDMI_CEC_CNT_TO_400_US_MASK	VC4_MASK(4, 0)
+# define VC4_HDMI_CEC_CNT_TO_400_US_SHIFT	0
+
+#define VC4_HDMI_CEC_CNTRL_3			0x0f0
+# define VC4_HDMI_CEC_CNT_TO_2750_US_MASK	VC4_MASK(31, 24)
+# define VC4_HDMI_CEC_CNT_TO_2750_US_SHIFT	24
+# define VC4_HDMI_CEC_CNT_TO_2400_US_MASK	VC4_MASK(23, 16)
+# define VC4_HDMI_CEC_CNT_TO_2400_US_SHIFT	16
+# define VC4_HDMI_CEC_CNT_TO_2050_US_MASK	VC4_MASK(15, 8)
+# define VC4_HDMI_CEC_CNT_TO_2050_US_SHIFT	8
+# define VC4_HDMI_CEC_CNT_TO_1700_US_MASK	VC4_MASK(7, 0)
+# define VC4_HDMI_CEC_CNT_TO_1700_US_SHIFT	0
+
+#define VC4_HDMI_CEC_CNTRL_4			0x0f4
+# define VC4_HDMI_CEC_CNT_TO_4300_US_MASK	VC4_MASK(31, 24)
+# define VC4_HDMI_CEC_CNT_TO_4300_US_SHIFT	24
+# define VC4_HDMI_CEC_CNT_TO_3900_US_MASK	VC4_MASK(23, 16)
+# define VC4_HDMI_CEC_CNT_TO_3900_US_SHIFT	16
+# define VC4_HDMI_CEC_CNT_TO_3600_US_MASK	VC4_MASK(15, 8)
+# define VC4_HDMI_CEC_CNT_TO_3600_US_SHIFT	8
+# define VC4_HDMI_CEC_CNT_TO_3500_US_MASK	VC4_MASK(7, 0)
+# define VC4_HDMI_CEC_CNT_TO_3500_US_SHIFT	0
+
+#define VC4_HDMI_CEC_CNTRL_5			0x0f8
+# define VC4_HDMI_CEC_TX_SW_RESET		BIT(27)
+# define VC4_HDMI_CEC_RX_SW_RESET		BIT(26)
+# define VC4_HDMI_CEC_PAD_SW_RESET		BIT(25)
+# define VC4_HDMI_CEC_MUX_TP_OUT_CEC		BIT(24)
+# define VC4_HDMI_CEC_RX_CEC_INT		BIT(23)
+# define VC4_HDMI_CEC_CLK_PRELOAD_MASK		VC4_MASK(22, 16)
+# define VC4_HDMI_CEC_CLK_PRELOAD_SHIFT		16
+# define VC4_HDMI_CEC_CNT_TO_4700_US_MASK	VC4_MASK(15, 8)
+# define VC4_HDMI_CEC_CNT_TO_4700_US_SHIFT	8
+# define VC4_HDMI_CEC_CNT_TO_4500_US_MASK	VC4_MASK(7, 0)
+# define VC4_HDMI_CEC_CNT_TO_4500_US_SHIFT	0
+
+/* Transmit data, first byte is low byte of the 32-bit reg.  MSB of
+ * each byte transmitted first.
+ */
+#define VC4_HDMI_CEC_TX_DATA_1			0x0fc
+#define VC4_HDMI_CEC_TX_DATA_2			0x100
+#define VC4_HDMI_CEC_TX_DATA_3			0x104
+#define VC4_HDMI_CEC_TX_DATA_4			0x108
+#define VC4_HDMI_CEC_RX_DATA_1			0x10c
+#define VC4_HDMI_CEC_RX_DATA_2			0x110
+#define VC4_HDMI_CEC_RX_DATA_3			0x114
+#define VC4_HDMI_CEC_RX_DATA_4			0x118
+
 #define VC4_HDMI_TX_PHY_RESET_CTL		0x2c0
 
 #define VC4_HDMI_TX_PHY_CTL0			0x2c4
 # define VC4_HDMI_TX_PHY_RNG_PWRDN		BIT(25)
+
+/* Interrupt status bits */
+#define VC4_HDMI_CPU_STATUS			0x340
+#define VC4_HDMI_CPU_SET			0x344
+#define VC4_HDMI_CPU_CLEAR			0x348
+# define VC4_HDMI_CPU_CEC			BIT(6)
+# define VC4_HDMI_CPU_HOTPLUG			BIT(0)
+
+#define VC4_HDMI_CPU_MASK_STATUS		0x34c
+#define VC4_HDMI_CPU_MASK_SET			0x350
+#define VC4_HDMI_CPU_MASK_CLEAR			0x354
 
 #define VC4_HDMI_GCP(x)				(0x400 + ((x) * 0x4))
 #define VC4_HDMI_RAM_PACKET(x)			(0x400 + ((x) * 0x24))
 #define VC4_HDMI_PACKET_STRIDE			0x24
 
 #define VC4_HD_M_CTL				0x00c
+/* Debug: Current receive value on the CEC pad. */
+# define VC4_HD_CECRXD				BIT(9)
+/* Debug: Override CEC output to 0. */
+# define VC4_HD_CECOVR				BIT(8)
 # define VC4_HD_M_REGISTER_FILE_STANDBY		(3 << 6)
 # define VC4_HD_M_RAM_STANDBY			(3 << 4)
 # define VC4_HD_M_SW_RST			BIT(2)
@@ -764,6 +848,7 @@ enum hvs_pixel_format {
 #define SCALER_POS2_ALPHA_MODE_FIXED		1
 #define SCALER_POS2_ALPHA_MODE_FIXED_NONZERO	2
 #define SCALER_POS2_ALPHA_MODE_FIXED_OVER_0x07	3
+#define SCALER_POS2_ALPHA_PREMULT		BIT(29)
 
 #define SCALER_POS2_HEIGHT_MASK			VC4_MASK(27, 16)
 #define SCALER_POS2_HEIGHT_SHIFT		16

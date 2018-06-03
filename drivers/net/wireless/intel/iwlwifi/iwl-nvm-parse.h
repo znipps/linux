@@ -77,7 +77,7 @@
  */
 struct iwl_nvm_data *
 iwl_parse_nvm_data(struct iwl_trans *trans, const struct iwl_cfg *cfg,
-		   const __le16 *nvm_hw, const __le16 *nvm_sw,
+		   const __be16 *nvm_hw, const __le16 *nvm_sw,
 		   const __le16 *nvm_calib, const __le16 *regulatory,
 		   const __le16 *mac_override, const __le16 *phy_sku,
 		   u8 tx_chains, u8 rx_chains, bool lar_fw_supported);
@@ -93,36 +93,22 @@ void iwl_set_hw_address_from_csr(struct iwl_trans *trans,
  */
 void iwl_init_sbands(struct device *dev, const struct iwl_cfg *cfg,
 		     struct iwl_nvm_data *data, const __le16 *nvm_ch_flags,
-		     u8 tx_chains, u8 rx_chains, bool lar_supported);
+		     u8 tx_chains, u8 rx_chains, bool lar_supported,
+		     bool no_wide_in_5ghz);
 
 /**
  * iwl_parse_mcc_info - parse MCC (mobile country code) info coming from FW
  *
  * This function parses the regulatory channel data received as a
  * MCC_UPDATE_CMD command. It returns a newly allocation regulatory domain,
- * to be fed into the regulatory core. An ERR_PTR is returned on error.
+ * to be fed into the regulatory core. In case the geo_info is set handle
+ * accordingly. An ERR_PTR is returned on error.
  * If not given to the regulatory core, the user is responsible for freeing
  * the regdomain returned here with kfree.
  */
 struct ieee80211_regdomain *
 iwl_parse_nvm_mcc_info(struct device *dev, const struct iwl_cfg *cfg,
-		       int num_of_ch, __le32 *channels, u16 fw_mcc);
-
-#ifdef CONFIG_ACPI
-/**
- * iwl_get_bios_mcc - read MCC from BIOS, if available
- *
- * @dev: the struct device
- * @mcc: output buffer (3 bytes) that will get the MCC
- *
- * This function tries to read the current MCC from ACPI if available.
- */
-int iwl_get_bios_mcc(struct device *dev, char *mcc);
-#else
-static inline int iwl_get_bios_mcc(struct device *dev, char *mcc)
-{
-	return -ENOENT;
-}
-#endif
+		       int num_of_ch, __le32 *channels, u16 fw_mcc,
+		       u16 geo_info);
 
 #endif /* __iwl_nvm_parse_h__ */

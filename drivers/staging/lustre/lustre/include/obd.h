@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * GPL HEADER START
  *
@@ -35,15 +36,15 @@
 
 #include <linux/spinlock.h>
 
-#include "lustre/lustre_idl.h"
-#include "lustre_lib.h"
-#include "lu_ref.h"
-#include "lustre_export.h"
-#include "lustre_fid.h"
-#include "lustre_fld.h"
-#include "lustre_handles.h"
-#include "lustre_intent.h"
-#include "cl_object.h"
+#include <uapi/linux/lustre/lustre_idl.h>
+#include <lustre_lib.h>
+#include <lu_ref.h>
+#include <lustre_export.h>
+#include <lustre_fid.h>
+#include <lustre_fld.h>
+#include <lustre_handles.h>
+#include <lustre_intent.h>
+#include <cl_object.h>
 
 #define MAX_OBD_DEVICES 8192
 
@@ -190,7 +191,7 @@ struct client_obd {
 	struct sptlrpc_flavor    cl_flvr_mgc;   /* fixed flavor of mgc->mgs */
 
 	/* the grant values are protected by loi_list_lock below */
-	unsigned long		 cl_dirty_pages;	/* all _dirty_ in pahges */
+	unsigned long		 cl_dirty_pages;	/* all _dirty_ in pages */
 	unsigned long		 cl_dirty_max_pages;	/* allowed w/o rpc */
 	unsigned long		 cl_dirty_transit;	/* dirty synchronous */
 	unsigned long		 cl_avail_grant;	/* bytes of credit for ost */
@@ -404,12 +405,10 @@ struct lmv_tgt_desc {
 };
 
 struct lmv_obd {
-	int			refcount;
 	struct lu_client_fld	lmv_fld;
 	spinlock_t		lmv_lock;
 	struct lmv_desc		desc;
 	struct obd_uuid		cluuid;
-	struct obd_export	*exp;
 
 	struct mutex		lmv_init_mutex;
 	int			connected;

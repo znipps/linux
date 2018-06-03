@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * linux/fs/nfs/nfs3xdr.c
  *
@@ -1996,6 +1997,7 @@ int nfs3_decode_dirent(struct xdr_stream *xdr, struct nfs_entry *entry,
 	struct nfs_entry old = *entry;
 	__be32 *p;
 	int error;
+	u64 new_cookie;
 
 	p = xdr_inline_decode(xdr, 4);
 	if (unlikely(p == NULL))
@@ -2018,8 +2020,7 @@ int nfs3_decode_dirent(struct xdr_stream *xdr, struct nfs_entry *entry,
 	if (unlikely(error))
 		return error;
 
-	entry->prev_cookie = entry->cookie;
-	error = decode_cookie3(xdr, &entry->cookie);
+	error = decode_cookie3(xdr, &new_cookie);
 	if (unlikely(error))
 		return error;
 
@@ -2052,6 +2053,9 @@ int nfs3_decode_dirent(struct xdr_stream *xdr, struct nfs_entry *entry,
 		} else
 			zero_nfs_fh3(entry->fh);
 	}
+
+	entry->prev_cookie = entry->cookie;
+	entry->cookie = new_cookie;
 
 	return 0;
 

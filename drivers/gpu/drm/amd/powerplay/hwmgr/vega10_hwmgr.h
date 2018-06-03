@@ -31,7 +31,6 @@
 #include "vega10_ppsmc.h"
 #include "vega10_powertune.h"
 
-extern const uint32_t PhwVega10_Magic;
 #define VEGA10_MAX_HARDWARE_POWERLEVELS 2
 
 #define WaterMarksExist  1
@@ -64,7 +63,10 @@ enum {
 	GNLD_FW_CTF,
 	GNLD_LED_DISPLAY,
 	GNLD_FAN_CONTROL,
-	GNLD_VOLTAGE_CONTROLLER,
+	GNLD_FEATURE_FAST_PPT_BIT,
+	GNLD_DIDT,
+	GNLD_ACG,
+	GNLD_PCC_LIMIT,
 	GNLD_FEATURES_MAX
 };
 
@@ -188,12 +190,6 @@ struct vega10_vbios_boot_state {
 	uint32_t    dcef_clock;
 };
 
-#define DPMTABLE_OD_UPDATE_SCLK     0x00000001
-#define DPMTABLE_OD_UPDATE_MCLK     0x00000002
-#define DPMTABLE_UPDATE_SCLK        0x00000004
-#define DPMTABLE_UPDATE_MCLK        0x00000008
-#define DPMTABLE_OD_UPDATE_VDDC     0x00000010
-
 struct vega10_smc_state_table {
 	uint32_t        soc_boot_level;
 	uint32_t        gfx_boot_level;
@@ -230,7 +226,9 @@ struct vega10_registry_data {
 	uint8_t   cac_support;
 	uint8_t   clock_stretcher_support;
 	uint8_t   db_ramping_support;
+	uint8_t   didt_mode;
 	uint8_t   didt_support;
+	uint8_t   edc_didt_support;
 	uint8_t   dynamic_state_patching_support;
 	uint8_t   enable_pkg_pwr_tracking_feature;
 	uint8_t   enable_tdc_limit_feature;
@@ -263,6 +261,9 @@ struct vega10_registry_data {
 	uint8_t   tcp_ramping_support;
 	uint8_t   tdc_support;
 	uint8_t   td_ramping_support;
+	uint8_t   dbr_ramping_support;
+	uint8_t   gc_didt_support;
+	uint8_t   psm_didt_support;
 	uint8_t   thermal_out_gpio_support;
 	uint8_t   thermal_support;
 	uint8_t   fw_ctf_enabled;
@@ -373,14 +374,14 @@ struct vega10_hwmgr {
 	/* ---- Overdrive next setting ---- */
 	uint32_t                       apply_overdrive_next_settings_mask;
 
-	/* ---- Workload Mask ---- */
-	uint32_t                       workload_mask;
-
 	/* ---- SMU9 ---- */
 	struct smu_features            smu_features[GNLD_FEATURES_MAX];
 	struct vega10_smc_state_table  smc_state_table;
 
 	uint32_t                       config_telemetry;
+	uint32_t                       acg_loop_state;
+	uint32_t                       mem_channels;
+	uint8_t                       custom_profile_mode[4];
 };
 
 #define VEGA10_DPM2_NEAR_TDP_DEC                      10
@@ -425,6 +426,10 @@ struct vega10_hwmgr {
 #define PPVEGA10_VEGA10UCLKCLKAVERAGEALPHA_DFLT      25 /* 10% * 255 = 25 */
 #define PPVEGA10_VEGA10GFXACTIVITYAVERAGEALPHA_DFLT  25 /* 10% * 255 = 25 */
 
+#define VEGA10_UMD_PSTATE_GFXCLK_LEVEL         0x3
+#define VEGA10_UMD_PSTATE_SOCCLK_LEVEL         0x3
+#define VEGA10_UMD_PSTATE_MCLK_LEVEL           0x2
+
 extern int tonga_initializa_dynamic_state_adjustment_rule_settings(struct pp_hwmgr *hwmgr);
 extern int tonga_hwmgr_backend_fini(struct pp_hwmgr *hwmgr);
 extern int tonga_get_mc_microcode_version (struct pp_hwmgr *hwmgr);
@@ -435,5 +440,7 @@ int vega10_update_uvd_dpm(struct pp_hwmgr *hwmgr, bool bgate);
 int vega10_update_samu_dpm(struct pp_hwmgr *hwmgr, bool bgate);
 int vega10_update_acp_dpm(struct pp_hwmgr *hwmgr, bool bgate);
 int vega10_enable_disable_vce_dpm(struct pp_hwmgr *hwmgr, bool enable);
+int vega10_enable_smc_features(struct pp_hwmgr *hwmgr,
+		bool enable, uint32_t feature_mask);
 
 #endif /* _VEGA10_HWMGR_H_ */

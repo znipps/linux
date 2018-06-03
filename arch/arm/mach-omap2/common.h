@@ -29,7 +29,7 @@
 #include <linux/irq.h>
 #include <linux/delay.h>
 #include <linux/i2c.h>
-#include <linux/i2c/twl.h>
+#include <linux/mfd/twl.h>
 #include <linux/i2c-omap.h>
 #include <linux/reboot.h>
 #include <linux/irqchip/irq-omap-intc.h>
@@ -75,6 +75,13 @@ static inline int omap4_pm_init_early(void)
 {
 	return 0;
 }
+#endif
+
+#if defined(CONFIG_PM) && (defined(CONFIG_SOC_AM33XX) || \
+	defined(CONFIG_SOC_AM43XX))
+void amx3_common_pm_init(void);
+#else
+static inline void amx3_common_pm_init(void) { }
 #endif
 
 extern void omap2_init_common_infrastructure(void);
@@ -225,7 +232,6 @@ extern struct device *omap2_get_iva_device(void);
 extern struct device *omap2_get_l3_device(void);
 extern struct device *omap4_get_dsp_device(void);
 
-unsigned int omap4_xlate_irq(unsigned int hwirq);
 void omap_gic_of_init(void);
 
 #ifdef CONFIG_CACHE_L2X0

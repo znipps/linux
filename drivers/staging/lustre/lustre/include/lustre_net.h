@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * GPL HEADER START
  *
@@ -51,19 +52,20 @@
  */
 
 #include <linux/uio.h>
-#include "../../include/linux/libcfs/libcfs.h"
-#include "../../include/linux/lnet/nidstr.h"
-#include "../../include/linux/lnet/api.h"
-#include "lustre/lustre_idl.h"
-#include "lustre_ha.h"
-#include "lustre_sec.h"
-#include "lustre_import.h"
-#include "lprocfs_status.h"
-#include "lu_object.h"
-#include "lustre_req_layout.h"
+#include <linux/libcfs/libcfs.h>
+#include <uapi/linux/lnet/nidstr.h>
+#include <linux/lnet/api.h>
+#include <uapi/linux/lustre/lustre_idl.h>
+#include <lustre_errno.h>
+#include <lustre_ha.h>
+#include <lustre_sec.h>
+#include <lustre_import.h>
+#include <lprocfs_status.h>
+#include <lu_object.h>
+#include <lustre_req_layout.h>
 
-#include "obd_support.h"
-#include "lustre_ver.h"
+#include <obd_support.h>
+#include <uapi/linux/lustre/lustre_ver.h>
 
 /* MD flags we _always_ use */
 #define PTLRPC_MD_OPTIONS  0
@@ -521,7 +523,7 @@ struct lu_env;
 
 struct ldlm_lock;
 
-#include "lustre_nrs.h"
+#include <lustre_nrs.h>
 
 /**
  * Basic request prioritization operations structure.
@@ -558,13 +560,13 @@ struct ptlrpc_cli_req {
 	/** request sent timeval */
 	struct timespec64		 cr_sent_tv;
 	/** time for request really sent out */
-	time_t				 cr_sent_out;
+	time64_t			 cr_sent_out;
 	/** when req reply unlink must finish. */
-	time_t				 cr_reply_deadline;
+	time64_t			 cr_reply_deadline;
 	/** when req bulk unlink must finish. */
-	time_t				 cr_bulk_deadline;
+	time64_t			 cr_bulk_deadline;
 	/** when req unlink must finish. */
-	time_t				 cr_req_deadline;
+	time64_t			 cr_req_deadline;
 	/** Portal to which this request would be sent */
 	short				 cr_req_ptl;
 	/** Portal where to wait for reply and where reply would be sent */
@@ -663,7 +665,7 @@ struct ptlrpc_srv_req {
 	/** history sequence # */
 	__u64				sr_hist_seq;
 	/** the index of service's srv_at_array into which request is linked */
-	time_t				sr_at_index;
+	time64_t			sr_at_index;
 	/** authed uid */
 	uid_t				sr_auth_uid;
 	/** authed uid mapped to */
@@ -1257,8 +1259,6 @@ enum {
 	SVC_STOPPING    = 1 << 1,
 	SVC_STARTING    = 1 << 2,
 	SVC_RUNNING     = 1 << 3,
-	SVC_EVENT       = 1 << 4,
-	SVC_SIGNAL      = 1 << 5,
 };
 
 #define PTLRPC_THR_NAME_LEN		32
@@ -1301,11 +1301,6 @@ struct ptlrpc_thread {
 	char				t_name[PTLRPC_THR_NAME_LEN];
 };
 
-static inline int thread_is_init(struct ptlrpc_thread *thread)
-{
-	return thread->t_flags == 0;
-}
-
 static inline int thread_is_stopped(struct ptlrpc_thread *thread)
 {
 	return !!(thread->t_flags & SVC_STOPPED);
@@ -1324,16 +1319,6 @@ static inline int thread_is_starting(struct ptlrpc_thread *thread)
 static inline int thread_is_running(struct ptlrpc_thread *thread)
 {
 	return !!(thread->t_flags & SVC_RUNNING);
-}
-
-static inline int thread_is_event(struct ptlrpc_thread *thread)
-{
-	return !!(thread->t_flags & SVC_EVENT);
-}
-
-static inline int thread_is_signal(struct ptlrpc_thread *thread)
-{
-	return !!(thread->t_flags & SVC_SIGNAL);
 }
 
 static inline void thread_clear_flags(struct ptlrpc_thread *thread, __u32 flags)
@@ -1819,6 +1804,9 @@ int ptlrpc_register_rqbd(struct ptlrpc_request_buffer_desc *rqbd);
  */
 void ptlrpc_request_committed(struct ptlrpc_request *req, int force);
 
+int ptlrpc_inc_ref(void);
+void ptlrpc_dec_ref(void);
+
 void ptlrpc_init_client(int req_portal, int rep_portal, char *name,
 			struct ptlrpc_client *);
 struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid);
@@ -2266,7 +2254,7 @@ static inline int ptlrpc_send_limit_expired(struct ptlrpc_request *req)
 {
 	if (req->rq_delay_limit != 0 &&
 	    time_before(cfs_time_add(req->rq_queued_time,
-				     cfs_time_seconds(req->rq_delay_limit)),
+				     req->rq_delay_limit * HZ),
 			cfs_time_current())) {
 		return 1;
 	}

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0
 SUBDIRS := functional
 
 TEST_PROGS := run.sh
@@ -7,14 +8,21 @@ TEST_PROGS := run.sh
 include ../lib.mk
 
 all:
-	for DIR in $(SUBDIRS); do		\
+	@for DIR in $(SUBDIRS); do		\
 		BUILD_TARGET=$(OUTPUT)/$$DIR;	\
 		mkdir $$BUILD_TARGET  -p;	\
 		make OUTPUT=$$BUILD_TARGET -C $$DIR $@;\
+		if [ -e $$DIR/$(TEST_PROGS) ]; then \
+			rsync -a $$DIR/$(TEST_PROGS) $$BUILD_TARGET/; \
+		fi \
 	done
 
 override define RUN_TESTS
-	$(OUTPUT)/run.sh
+	@export KSFT_TAP_LEVEL=`echo 1`;
+	@echo "TAP version 13";
+	@echo "selftests: futex";
+	@echo "========================================";
+	@cd $(OUTPUT); ./run.sh
 endef
 
 override define INSTALL_RULE
@@ -33,7 +41,7 @@ override define EMIT_TESTS
 endef
 
 override define CLEAN
-	for DIR in $(SUBDIRS); do		\
+	@for DIR in $(SUBDIRS); do		\
 		BUILD_TARGET=$(OUTPUT)/$$DIR;	\
 		mkdir $$BUILD_TARGET  -p;	\
 		make OUTPUT=$$BUILD_TARGET -C $$DIR $@;\

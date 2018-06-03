@@ -96,7 +96,8 @@ EXPORT_SYMBOL_GPL(e820__mapped_any);
  * Note: this function only works correctly once the E820 table is sorted and
  * not-overlapping (at least for the range specified), which is the case normally.
  */
-bool __init e820__mapped_all(u64 start, u64 end, enum e820_type type)
+static struct e820_entry *__e820__mapped_all(u64 start, u64 end,
+					     enum e820_type type)
 {
 	int i;
 
@@ -122,9 +123,28 @@ bool __init e820__mapped_all(u64 start, u64 end, enum e820_type type)
 		 * coverage of the desired range exists:
 		 */
 		if (start >= end)
-			return 1;
+			return entry;
 	}
-	return 0;
+
+	return NULL;
+}
+
+/*
+ * This function checks if the entire range <start,end> is mapped with type.
+ */
+bool __init e820__mapped_all(u64 start, u64 end, enum e820_type type)
+{
+	return __e820__mapped_all(start, end, type);
+}
+
+/*
+ * This function returns the type associated with the range <start,end>.
+ */
+int e820__get_entry_type(u64 start, u64 end)
+{
+	struct e820_entry *entry = __e820__mapped_all(start, end, 0);
+
+	return entry ? entry->type : -EINVAL;
 }
 
 /*
@@ -904,6 +924,24 @@ static int __init parse_memmap_one(char *p)
 	} else if (*p == '!') {
 		start_at = memparse(p+1, &p);
 		e820__range_add(start_at, mem_size, E820_TYPE_PRAM);
+	} else if (*p == '%') {
+		enum e820_type from = 0, to = 0;
+
+		start_at = memparse(p + 1, &p);
+		if (*p == '-')
+			from = simple_strtoull(p + 1, &p, 0);
+		if (*p == '+')
+			to = simple_strtoull(p + 1, &p, 0);
+		if (*p != '\0')
+			return -EINVAL;
+		if (from && to)
+			e820__range_update(start_at, mem_size, from, to);
+		else if (to)
+			e820__range_add(start_at, mem_size, to);
+		else if (from)
+			e820__range_remove(start_at, mem_size, from, 1);
+		else
+			e820__range_remove(start_at, mem_size, 0, 0);
 	} else {
 		e820__range_remove(mem_size, ULLONG_MAX - mem_size, E820_TYPE_RAM, 1);
 	}

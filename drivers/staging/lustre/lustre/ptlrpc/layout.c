@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * GPL HEADER START
  *
@@ -46,18 +47,18 @@
 
 #include <linux/module.h>
 
-#include "../include/lustre/lustre_idl.h"
+#include <uapi/linux/lustre/lustre_idl.h>
 
-#include "../include/llog_swab.h"
-#include "../include/lustre_debug.h"
-#include "../include/lustre_swab.h"
-#include "../include/lustre_ver.h"
-#include "../include/obd.h"
-#include "../include/obd_support.h"
+#include <llog_swab.h>
+#include <lustre_debug.h>
+#include <lustre_swab.h>
+#include <uapi/linux/lustre/lustre_ver.h>
+#include <obd.h>
+#include <obd_support.h>
 
 /* struct ptlrpc_request, lustre_msg* */
-#include "../include/lustre_req_layout.h"
-#include "../include/lustre_acl.h"
+#include <lustre_req_layout.h>
+#include <lustre_acl.h>
 
 /*
  * RQFs (see below) refer to two struct req_msg_field arrays describing the
@@ -1554,7 +1555,7 @@ struct req_format RQF_OST_GET_INFO_FIEMAP =
 EXPORT_SYMBOL(RQF_OST_GET_INFO_FIEMAP);
 
 /* Convenience macro */
-#define FMT_FIELD(fmt, i, j) (fmt)->rf_fields[(i)].d[(j)]
+#define FMT_FIELD(fmt, i, j) ((fmt)->rf_fields[(i)].d[(j)])
 
 /**
  * Initializes the capsule abstraction by computing and setting the \a rf_idx

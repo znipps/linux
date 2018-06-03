@@ -310,6 +310,7 @@ bool aa_update_label_name(struct aa_ns *ns, struct aa_label *label, gfp_t gfp);
 #define FLAG_SHOW_MODE 1
 #define FLAG_VIEW_SUBNS 2
 #define FLAG_HIDDEN_UNCONFINED 4
+#define FLAG_ABS_ROOT 8
 int aa_label_snxprint(char *str, size_t size, struct aa_ns *view,
 		      struct aa_label *label, int flags);
 int aa_label_asxprint(char **strp, struct aa_ns *ns, struct aa_label *label,
@@ -326,8 +327,36 @@ void aa_label_audit(struct audit_buffer *ab, struct aa_label *label, gfp_t gfp);
 void aa_label_seq_print(struct seq_file *f, struct aa_label *label, gfp_t gfp);
 void aa_label_printk(struct aa_label *label, gfp_t gfp);
 
+struct aa_label *aa_label_strn_parse(struct aa_label *base, const char *str,
+				     size_t n, gfp_t gfp, bool create,
+				     bool force_stack);
 struct aa_label *aa_label_parse(struct aa_label *base, const char *str,
 				gfp_t gfp, bool create, bool force_stack);
+
+static inline const char *aa_label_strn_split(const char *str, int n)
+{
+	const char *pos;
+	unsigned int state;
+
+	state = aa_dfa_matchn_until(stacksplitdfa, DFA_START, str, n, &pos);
+	if (!ACCEPT_TABLE(stacksplitdfa)[state])
+		return NULL;
+
+	return pos - 3;
+}
+
+static inline const char *aa_label_str_split(const char *str)
+{
+	const char *pos;
+	unsigned int state;
+
+	state = aa_dfa_match_until(stacksplitdfa, DFA_START, str, &pos);
+	if (!ACCEPT_TABLE(stacksplitdfa)[state])
+		return NULL;
+
+	return pos - 3;
+}
+
 
 
 struct aa_perms;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 #include "juno-clocks.dtsi"
 
 / {
@@ -67,10 +68,29 @@
 		interrupt-controller;
 		interrupts = <GIC_PPI 9 (GIC_CPU_MASK_SIMPLE(6) | IRQ_TYPE_LEVEL_HIGH)>;
 		ranges = <0 0 0 0x2c1c0000 0 0x40000>;
+
 		v2m_0: v2m@0 {
 			compatible = "arm,gic-v2m-frame";
 			msi-controller;
-			reg = <0 0 0 0x1000>;
+			reg = <0 0 0 0x10000>;
+		};
+
+		v2m@10000 {
+			compatible = "arm,gic-v2m-frame";
+			msi-controller;
+			reg = <0 0x10000 0 0x10000>;
+		};
+
+		v2m@20000 {
+			compatible = "arm,gic-v2m-frame";
+			msi-controller;
+			reg = <0 0x20000 0 0x10000>;
+		};
+
+		v2m@30000 {
+			compatible = "arm,gic-v2m-frame";
+			msi-controller;
+			reg = <0 0x30000 0 0x10000>;
 		};
 	};
 
@@ -201,7 +221,7 @@
 		};
 	};
 
-	cpu_debug0: cpu_debug@22010000 {
+	cpu_debug0: cpu-debug@22010000 {
 		compatible = "arm,coresight-cpu-debug", "arm,primecell";
 		reg = <0x0 0x22010000 0x0 0x1000>;
 
@@ -260,7 +280,7 @@
 		};
 	};
 
-	cpu_debug1: cpu_debug@22110000 {
+	cpu_debug1: cpu-debug@22110000 {
 		compatible = "arm,coresight-cpu-debug", "arm,primecell";
 		reg = <0x0 0x22110000 0x0 0x1000>;
 
@@ -283,7 +303,7 @@
 		};
 	};
 
-	cpu_debug2: cpu_debug@23010000 {
+	cpu_debug2: cpu-debug@23010000 {
 		compatible = "arm,coresight-cpu-debug", "arm,primecell";
 		reg = <0x0 0x23010000 0x0 0x1000>;
 
@@ -356,7 +376,7 @@
 		};
 	};
 
-	cpu_debug3: cpu_debug@23110000 {
+	cpu_debug3: cpu-debug@23110000 {
 		compatible = "arm,coresight-cpu-debug", "arm,primecell";
 		reg = <0x0 0x23110000 0x0 0x1000>;
 
@@ -379,7 +399,7 @@
 		};
 	};
 
-	cpu_debug4: cpu_debug@23210000 {
+	cpu_debug4: cpu-debug@23210000 {
 		compatible = "arm,coresight-cpu-debug", "arm,primecell";
 		reg = <0x0 0x23210000 0x0 0x1000>;
 
@@ -402,7 +422,7 @@
 		};
 	};
 
-	cpu_debug5: cpu_debug@23310000 {
+	cpu_debug5: cpu-debug@23310000 {
 		compatible = "arm,coresight-cpu-debug", "arm,primecell";
 		reg = <0x0 0x23310000 0x0 0x1000>;
 
@@ -426,7 +446,7 @@
 	};
 
 	replicator@20120000 {
-		compatible = "qcom,coresight-replicator1x", "arm,primecell";
+		compatible = "arm,coresight-dynamic-replicator", "arm,primecell";
 		reg = <0 0x20120000 0 0x1000>;
 
 		clocks = <&soc_smc50mhz>;

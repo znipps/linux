@@ -142,7 +142,7 @@ int pp_atomfwctrl_get_voltage_table_v4(struct pp_hwmgr *hwmgr,
 		}
 	} else if (voltage_mode == VOLTAGE_OBJ_SVID2) {
 		voltage_table->psi1_enable =
-			voltage_object->svid2_voltage_obj.loadline_psi1 & 0x1;
+			(voltage_object->svid2_voltage_obj.loadline_psi1 & 0x20) >> 5;
 		voltage_table->psi0_enable =
 			voltage_object->svid2_voltage_obj.psi0_enable & 0x1;
 		voltage_table->max_vid_step =
@@ -276,7 +276,10 @@ int pp_atomfwctrl_get_avfs_information(struct pp_hwmgr *hwmgr,
 		struct pp_atomfwctrl_avfs_parameters *param)
 {
 	uint16_t idx;
+	uint8_t format_revision, content_revision;
+
 	struct atom_asic_profiling_info_v4_1 *profile;
+	struct atom_asic_profiling_info_v4_2 *profile_v4_2;
 
 	idx = GetIndexIntoMasterDataTable(asic_profiling_info);
 	profile = (struct atom_asic_profiling_info_v4_1 *)
@@ -286,76 +289,172 @@ int pp_atomfwctrl_get_avfs_information(struct pp_hwmgr *hwmgr,
 	if (!profile)
 		return -1;
 
-	param->ulMaxVddc = le32_to_cpu(profile->maxvddc);
-	param->ulMinVddc = le32_to_cpu(profile->minvddc);
-	param->ulMeanNsigmaAcontant0 =
-			le32_to_cpu(profile->avfs_meannsigma_acontant0);
-	param->ulMeanNsigmaAcontant1 =
-			le32_to_cpu(profile->avfs_meannsigma_acontant1);
-	param->ulMeanNsigmaAcontant2 =
-			le32_to_cpu(profile->avfs_meannsigma_acontant2);
-	param->usMeanNsigmaDcTolSigma =
-			le16_to_cpu(profile->avfs_meannsigma_dc_tol_sigma);
-	param->usMeanNsigmaPlatformMean =
-			le16_to_cpu(profile->avfs_meannsigma_platform_mean);
-	param->usMeanNsigmaPlatformSigma =
-			le16_to_cpu(profile->avfs_meannsigma_platform_sigma);
-	param->ulGbVdroopTableCksoffA0 =
-			le32_to_cpu(profile->gb_vdroop_table_cksoff_a0);
-	param->ulGbVdroopTableCksoffA1 =
-			le32_to_cpu(profile->gb_vdroop_table_cksoff_a1);
-	param->ulGbVdroopTableCksoffA2 =
-			le32_to_cpu(profile->gb_vdroop_table_cksoff_a2);
-	param->ulGbVdroopTableCksonA0 =
-			le32_to_cpu(profile->gb_vdroop_table_ckson_a0);
-	param->ulGbVdroopTableCksonA1 =
-			le32_to_cpu(profile->gb_vdroop_table_ckson_a1);
-	param->ulGbVdroopTableCksonA2 =
-			le32_to_cpu(profile->gb_vdroop_table_ckson_a2);
-	param->ulGbFuseTableCksoffM1 =
-			le32_to_cpu(profile->avfsgb_fuse_table_cksoff_m1);
-	param->ulGbFuseTableCksoffM2 =
-			le32_to_cpu(profile->avfsgb_fuse_table_cksoff_m2);
-	param->ulGbFuseTableCksoffB =
-			le32_to_cpu(profile->avfsgb_fuse_table_cksoff_b);
-	param->ulGbFuseTableCksonM1 =
-			le32_to_cpu(profile->avfsgb_fuse_table_ckson_m1);
-	param->ulGbFuseTableCksonM2 =
-			le32_to_cpu(profile->avfsgb_fuse_table_ckson_m2);
-	param->ulGbFuseTableCksonB =
-			le32_to_cpu(profile->avfsgb_fuse_table_ckson_b);
+	format_revision = ((struct atom_common_table_header *)profile)->format_revision;
+	content_revision = ((struct atom_common_table_header *)profile)->content_revision;
 
-	param->ucEnableGbVdroopTableCkson =
-			profile->enable_gb_vdroop_table_ckson;
-	param->ucEnableGbFuseTableCkson =
-			profile->enable_gb_fuse_table_ckson;
-	param->usPsmAgeComfactor =
-			le16_to_cpu(profile->psm_age_comfactor);
+	if (format_revision == 4 && content_revision == 1) {
+		param->ulMaxVddc = le32_to_cpu(profile->maxvddc);
+		param->ulMinVddc = le32_to_cpu(profile->minvddc);
+		param->ulMeanNsigmaAcontant0 =
+				le32_to_cpu(profile->avfs_meannsigma_acontant0);
+		param->ulMeanNsigmaAcontant1 =
+				le32_to_cpu(profile->avfs_meannsigma_acontant1);
+		param->ulMeanNsigmaAcontant2 =
+				le32_to_cpu(profile->avfs_meannsigma_acontant2);
+		param->usMeanNsigmaDcTolSigma =
+				le16_to_cpu(profile->avfs_meannsigma_dc_tol_sigma);
+		param->usMeanNsigmaPlatformMean =
+				le16_to_cpu(profile->avfs_meannsigma_platform_mean);
+		param->usMeanNsigmaPlatformSigma =
+				le16_to_cpu(profile->avfs_meannsigma_platform_sigma);
+		param->ulGbVdroopTableCksoffA0 =
+				le32_to_cpu(profile->gb_vdroop_table_cksoff_a0);
+		param->ulGbVdroopTableCksoffA1 =
+				le32_to_cpu(profile->gb_vdroop_table_cksoff_a1);
+		param->ulGbVdroopTableCksoffA2 =
+				le32_to_cpu(profile->gb_vdroop_table_cksoff_a2);
+		param->ulGbVdroopTableCksonA0 =
+				le32_to_cpu(profile->gb_vdroop_table_ckson_a0);
+		param->ulGbVdroopTableCksonA1 =
+				le32_to_cpu(profile->gb_vdroop_table_ckson_a1);
+		param->ulGbVdroopTableCksonA2 =
+				le32_to_cpu(profile->gb_vdroop_table_ckson_a2);
+		param->ulGbFuseTableCksoffM1 =
+				le32_to_cpu(profile->avfsgb_fuse_table_cksoff_m1);
+		param->ulGbFuseTableCksoffM2 =
+				le32_to_cpu(profile->avfsgb_fuse_table_cksoff_m2);
+		param->ulGbFuseTableCksoffB =
+				le32_to_cpu(profile->avfsgb_fuse_table_cksoff_b);
+		param->ulGbFuseTableCksonM1 =
+				le32_to_cpu(profile->avfsgb_fuse_table_ckson_m1);
+		param->ulGbFuseTableCksonM2 =
+				le32_to_cpu(profile->avfsgb_fuse_table_ckson_m2);
+		param->ulGbFuseTableCksonB =
+				le32_to_cpu(profile->avfsgb_fuse_table_ckson_b);
 
-	param->ulDispclk2GfxclkM1 =
-			le32_to_cpu(profile->dispclk2gfxclk_a);
-	param->ulDispclk2GfxclkM2 =
-			le32_to_cpu(profile->dispclk2gfxclk_b);
-	param->ulDispclk2GfxclkB =
-			le32_to_cpu(profile->dispclk2gfxclk_c);
-	param->ulDcefclk2GfxclkM1 =
-			le32_to_cpu(profile->dcefclk2gfxclk_a);
-	param->ulDcefclk2GfxclkM2 =
-			le32_to_cpu(profile->dcefclk2gfxclk_b);
-	param->ulDcefclk2GfxclkB =
-			le32_to_cpu(profile->dcefclk2gfxclk_c);
-	param->ulPixelclk2GfxclkM1 =
-			le32_to_cpu(profile->pixclk2gfxclk_a);
-	param->ulPixelclk2GfxclkM2 =
-			le32_to_cpu(profile->pixclk2gfxclk_b);
-	param->ulPixelclk2GfxclkB =
-			le32_to_cpu(profile->pixclk2gfxclk_c);
-	param->ulPhyclk2GfxclkM1 =
-			le32_to_cpu(profile->phyclk2gfxclk_a);
-	param->ulPhyclk2GfxclkM2 =
-			le32_to_cpu(profile->phyclk2gfxclk_b);
-	param->ulPhyclk2GfxclkB =
-			le32_to_cpu(profile->phyclk2gfxclk_c);
+		param->ucEnableGbVdroopTableCkson =
+				profile->enable_gb_vdroop_table_ckson;
+		param->ucEnableGbFuseTableCkson =
+				profile->enable_gb_fuse_table_ckson;
+		param->usPsmAgeComfactor =
+				le16_to_cpu(profile->psm_age_comfactor);
+
+		param->ulDispclk2GfxclkM1 =
+				le32_to_cpu(profile->dispclk2gfxclk_a);
+		param->ulDispclk2GfxclkM2 =
+				le32_to_cpu(profile->dispclk2gfxclk_b);
+		param->ulDispclk2GfxclkB =
+				le32_to_cpu(profile->dispclk2gfxclk_c);
+		param->ulDcefclk2GfxclkM1 =
+				le32_to_cpu(profile->dcefclk2gfxclk_a);
+		param->ulDcefclk2GfxclkM2 =
+				le32_to_cpu(profile->dcefclk2gfxclk_b);
+		param->ulDcefclk2GfxclkB =
+				le32_to_cpu(profile->dcefclk2gfxclk_c);
+		param->ulPixelclk2GfxclkM1 =
+				le32_to_cpu(profile->pixclk2gfxclk_a);
+		param->ulPixelclk2GfxclkM2 =
+				le32_to_cpu(profile->pixclk2gfxclk_b);
+		param->ulPixelclk2GfxclkB =
+				le32_to_cpu(profile->pixclk2gfxclk_c);
+		param->ulPhyclk2GfxclkM1 =
+				le32_to_cpu(profile->phyclk2gfxclk_a);
+		param->ulPhyclk2GfxclkM2 =
+				le32_to_cpu(profile->phyclk2gfxclk_b);
+		param->ulPhyclk2GfxclkB =
+				le32_to_cpu(profile->phyclk2gfxclk_c);
+		param->ulAcgGbVdroopTableA0           = 0;
+		param->ulAcgGbVdroopTableA1           = 0;
+		param->ulAcgGbVdroopTableA2           = 0;
+		param->ulAcgGbFuseTableM1             = 0;
+		param->ulAcgGbFuseTableM2             = 0;
+		param->ulAcgGbFuseTableB              = 0;
+		param->ucAcgEnableGbVdroopTable       = 0;
+		param->ucAcgEnableGbFuseTable         = 0;
+	} else if (format_revision == 4 && content_revision == 2) {
+		profile_v4_2 = (struct atom_asic_profiling_info_v4_2 *)profile;
+		param->ulMaxVddc = le32_to_cpu(profile_v4_2->maxvddc);
+		param->ulMinVddc = le32_to_cpu(profile_v4_2->minvddc);
+		param->ulMeanNsigmaAcontant0 =
+				le32_to_cpu(profile_v4_2->avfs_meannsigma_acontant0);
+		param->ulMeanNsigmaAcontant1 =
+				le32_to_cpu(profile_v4_2->avfs_meannsigma_acontant1);
+		param->ulMeanNsigmaAcontant2 =
+				le32_to_cpu(profile_v4_2->avfs_meannsigma_acontant2);
+		param->usMeanNsigmaDcTolSigma =
+				le16_to_cpu(profile_v4_2->avfs_meannsigma_dc_tol_sigma);
+		param->usMeanNsigmaPlatformMean =
+				le16_to_cpu(profile_v4_2->avfs_meannsigma_platform_mean);
+		param->usMeanNsigmaPlatformSigma =
+				le16_to_cpu(profile_v4_2->avfs_meannsigma_platform_sigma);
+		param->ulGbVdroopTableCksoffA0 =
+				le32_to_cpu(profile_v4_2->gb_vdroop_table_cksoff_a0);
+		param->ulGbVdroopTableCksoffA1 =
+				le32_to_cpu(profile_v4_2->gb_vdroop_table_cksoff_a1);
+		param->ulGbVdroopTableCksoffA2 =
+				le32_to_cpu(profile_v4_2->gb_vdroop_table_cksoff_a2);
+		param->ulGbVdroopTableCksonA0 =
+				le32_to_cpu(profile_v4_2->gb_vdroop_table_ckson_a0);
+		param->ulGbVdroopTableCksonA1 =
+				le32_to_cpu(profile_v4_2->gb_vdroop_table_ckson_a1);
+		param->ulGbVdroopTableCksonA2 =
+				le32_to_cpu(profile_v4_2->gb_vdroop_table_ckson_a2);
+		param->ulGbFuseTableCksoffM1 =
+				le32_to_cpu(profile_v4_2->avfsgb_fuse_table_cksoff_m1);
+		param->ulGbFuseTableCksoffM2 =
+				le32_to_cpu(profile_v4_2->avfsgb_fuse_table_cksoff_m2);
+		param->ulGbFuseTableCksoffB =
+				le32_to_cpu(profile_v4_2->avfsgb_fuse_table_cksoff_b);
+		param->ulGbFuseTableCksonM1 =
+				le32_to_cpu(profile_v4_2->avfsgb_fuse_table_ckson_m1);
+		param->ulGbFuseTableCksonM2 =
+				le32_to_cpu(profile_v4_2->avfsgb_fuse_table_ckson_m2);
+		param->ulGbFuseTableCksonB =
+				le32_to_cpu(profile_v4_2->avfsgb_fuse_table_ckson_b);
+
+		param->ucEnableGbVdroopTableCkson =
+				profile_v4_2->enable_gb_vdroop_table_ckson;
+		param->ucEnableGbFuseTableCkson =
+				profile_v4_2->enable_gb_fuse_table_ckson;
+		param->usPsmAgeComfactor =
+				le16_to_cpu(profile_v4_2->psm_age_comfactor);
+
+		param->ulDispclk2GfxclkM1 =
+				le32_to_cpu(profile_v4_2->dispclk2gfxclk_a);
+		param->ulDispclk2GfxclkM2 =
+				le32_to_cpu(profile_v4_2->dispclk2gfxclk_b);
+		param->ulDispclk2GfxclkB =
+				le32_to_cpu(profile_v4_2->dispclk2gfxclk_c);
+		param->ulDcefclk2GfxclkM1 =
+				le32_to_cpu(profile_v4_2->dcefclk2gfxclk_a);
+		param->ulDcefclk2GfxclkM2 =
+				le32_to_cpu(profile_v4_2->dcefclk2gfxclk_b);
+		param->ulDcefclk2GfxclkB =
+				le32_to_cpu(profile_v4_2->dcefclk2gfxclk_c);
+		param->ulPixelclk2GfxclkM1 =
+				le32_to_cpu(profile_v4_2->pixclk2gfxclk_a);
+		param->ulPixelclk2GfxclkM2 =
+				le32_to_cpu(profile_v4_2->pixclk2gfxclk_b);
+		param->ulPixelclk2GfxclkB =
+				le32_to_cpu(profile_v4_2->pixclk2gfxclk_c);
+		param->ulPhyclk2GfxclkM1 =
+				le32_to_cpu(profile->phyclk2gfxclk_a);
+		param->ulPhyclk2GfxclkM2 =
+				le32_to_cpu(profile_v4_2->phyclk2gfxclk_b);
+		param->ulPhyclk2GfxclkB =
+				le32_to_cpu(profile_v4_2->phyclk2gfxclk_c);
+		param->ulAcgGbVdroopTableA0 = le32_to_cpu(profile_v4_2->acg_gb_vdroop_table_a0);
+		param->ulAcgGbVdroopTableA1 = le32_to_cpu(profile_v4_2->acg_gb_vdroop_table_a1);
+		param->ulAcgGbVdroopTableA2 = le32_to_cpu(profile_v4_2->acg_gb_vdroop_table_a2);
+		param->ulAcgGbFuseTableM1 = le32_to_cpu(profile_v4_2->acg_avfsgb_fuse_table_m1);
+		param->ulAcgGbFuseTableM2 = le32_to_cpu(profile_v4_2->acg_avfsgb_fuse_table_m2);
+		param->ulAcgGbFuseTableB = le32_to_cpu(profile_v4_2->acg_avfsgb_fuse_table_b);
+		param->ucAcgEnableGbVdroopTable = le32_to_cpu(profile_v4_2->enable_acg_gb_vdroop_table);
+		param->ucAcgEnableGbFuseTable = le32_to_cpu(profile_v4_2->enable_acg_gb_fuse_table);
+	} else {
+		pr_info("Invalid VBIOS AVFS ProfilingInfo Revision!\n");
+		return -EINVAL;
+	}
 
 	return 0;
 }
@@ -433,6 +532,7 @@ int pp_atomfwctrl_get_vbios_bootup_values(struct pp_hwmgr *hwmgr,
 	boot_values->usVddci    = info->bootup_vddci_mv;
 	boot_values->usMvddc    = info->bootup_mvddc_mv;
 	boot_values->usVddGfx   = info->bootup_vddgfx_mv;
+	boot_values->ucCoolingID = info->coolingsolution_id;
 	boot_values->ulSocClk   = 0;
 	boot_values->ulDCEFClk   = 0;
 
@@ -441,6 +541,96 @@ int pp_atomfwctrl_get_vbios_bootup_values(struct pp_hwmgr *hwmgr,
 
 	if (!pp_atomfwctrl__get_clk_information_by_clkid(hwmgr, SMU9_SYSPLL0_DCEFCLK_ID, &frequency))
 		boot_values->ulDCEFClk   = frequency;
+
+	return 0;
+}
+
+int pp_atomfwctrl_get_smc_dpm_information(struct pp_hwmgr *hwmgr,
+		struct pp_atomfwctrl_smc_dpm_parameters *param)
+{
+	struct atom_smc_dpm_info_v4_1 *info;
+	uint16_t ix;
+
+	ix = GetIndexIntoMasterDataTable(smc_dpm_info);
+	info = (struct atom_smc_dpm_info_v4_1 *)
+		cgs_atom_get_data_table(hwmgr->device,
+				ix, NULL, NULL, NULL);
+	if (!info) {
+		pr_info("Error retrieving BIOS Table Address!");
+		return -EINVAL;
+	}
+
+	param->liquid1_i2c_address = info->liquid1_i2c_address;
+	param->liquid2_i2c_address = info->liquid2_i2c_address;
+	param->vr_i2c_address = info->vr_i2c_address;
+	param->plx_i2c_address = info->plx_i2c_address;
+
+	param->liquid_i2c_linescl = info->liquid_i2c_linescl;
+	param->liquid_i2c_linesda = info->liquid_i2c_linesda;
+	param->vr_i2c_linescl = info->vr_i2c_linescl;
+	param->vr_i2c_linesda = info->vr_i2c_linesda;
+
+	param->plx_i2c_linescl = info->plx_i2c_linescl;
+	param->plx_i2c_linesda = info->plx_i2c_linesda;
+	param->vrsensorpresent = info->vrsensorpresent;
+	param->liquidsensorpresent = info->liquidsensorpresent;
+
+	param->maxvoltagestepgfx = info->maxvoltagestepgfx;
+	param->maxvoltagestepsoc = info->maxvoltagestepsoc;
+
+	param->vddgfxvrmapping = info->vddgfxvrmapping;
+	param->vddsocvrmapping = info->vddsocvrmapping;
+	param->vddmem0vrmapping = info->vddmem0vrmapping;
+	param->vddmem1vrmapping = info->vddmem1vrmapping;
+
+	param->gfxulvphasesheddingmask = info->gfxulvphasesheddingmask;
+	param->soculvphasesheddingmask = info->soculvphasesheddingmask;
+
+	param->gfxmaxcurrent = info->gfxmaxcurrent;
+	param->gfxoffset = info->gfxoffset;
+	param->padding_telemetrygfx = info->padding_telemetrygfx;
+
+	param->socmaxcurrent = info->socmaxcurrent;
+	param->socoffset = info->socoffset;
+	param->padding_telemetrysoc = info->padding_telemetrysoc;
+
+	param->mem0maxcurrent = info->mem0maxcurrent;
+	param->mem0offset = info->mem0offset;
+	param->padding_telemetrymem0 = info->padding_telemetrymem0;
+
+	param->mem1maxcurrent = info->mem1maxcurrent;
+	param->mem1offset = info->mem1offset;
+	param->padding_telemetrymem1 = info->padding_telemetrymem1;
+
+	param->acdcgpio = info->acdcgpio;
+	param->acdcpolarity = info->acdcpolarity;
+	param->vr0hotgpio = info->vr0hotgpio;
+	param->vr0hotpolarity = info->vr0hotpolarity;
+
+	param->vr1hotgpio = info->vr1hotgpio;
+	param->vr1hotpolarity = info->vr1hotpolarity;
+	param->padding1 = info->padding1;
+	param->padding2 = info->padding2;
+
+	param->ledpin0 = info->ledpin0;
+	param->ledpin1 = info->ledpin1;
+	param->ledpin2 = info->ledpin2;
+
+	param->pllgfxclkspreadenabled = info->pllgfxclkspreadenabled;
+	param->pllgfxclkspreadpercent = info->pllgfxclkspreadpercent;
+	param->pllgfxclkspreadfreq = info->pllgfxclkspreadfreq;
+
+	param->uclkspreadenabled = info->uclkspreadenabled;
+	param->uclkspreadpercent = info->uclkspreadpercent;
+	param->uclkspreadfreq = info->uclkspreadfreq;
+
+	param->socclkspreadenabled = info->socclkspreadenabled;
+	param->socclkspreadpercent = info->socclkspreadpercent;
+	param->socclkspreadfreq = info->socclkspreadfreq;
+
+	param->acggfxclkspreadenabled = info->acggfxclkspreadenabled;
+	param->acggfxclkspreadpercent = info->acggfxclkspreadpercent;
+	param->acggfxclkspreadfreq = info->acggfxclkspreadfreq;
 
 	return 0;
 }

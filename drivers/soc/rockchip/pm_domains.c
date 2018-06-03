@@ -20,6 +20,7 @@
 #include <linux/mfd/syscon.h>
 #include <dt-bindings/power/rk3288-power.h>
 #include <dt-bindings/power/rk3328-power.h>
+#include <dt-bindings/power/rk3366-power.h>
 #include <dt-bindings/power/rk3368-power.h>
 #include <dt-bindings/power/rk3399-power.h>
 
@@ -66,7 +67,7 @@ struct rockchip_pm_domain {
 	struct regmap **qos_regmap;
 	u32 *qos_save_regs[MAX_QOS_REGS_NUM];
 	int num_clks;
-	struct clk *clks[];
+	struct clk_bulk_data *clks;
 };
 
 struct rockchip_pmu {
@@ -273,13 +274,18 @@ static void rockchip_do_pmu_set_power_domain(struct rockchip_pm_domain *pd,
 
 static int rockchip_pd_power(struct rockchip_pm_domain *pd, bool power_on)
 {
-	int i;
+	struct rockchip_pmu *pmu = pd->pmu;
+	int ret;
 
-	mutex_lock(&pd->pmu->mutex);
+	mutex_lock(&pmu->mutex);
 
 	if (rockchip_pmu_domain_is_on(pd) != power_on) {
-		for (i = 0; i < pd->num_clks; i++)
-			clk_enable(pd->clks[i]);
+		ret = clk_bulk_enable(pd->num_clks, pd->clks);
+		if (ret < 0) {
+			dev_err(pmu->dev, "failed to enable clocks\n");
+			mutex_unlock(&pmu->mutex);
+			return ret;
+		}
 
 		if (!power_on) {
 			rockchip_pmu_save_qos(pd);
@@ -297,11 +303,10 @@ static int rockchip_pd_power(struct rockchip_pm_domain *pd, bool power_on)
 			rockchip_pmu_restore_qos(pd);
 		}
 
-		for (i = pd->num_clks - 1; i >= 0; i--)
-			clk_disable(pd->clks[i]);
+		clk_bulk_disable(pd->num_clks, pd->clks);
 	}
 
-	mutex_unlock(&pd->pmu->mutex);
+	mutex_unlock(&pmu->mutex);
 	return 0;
 }
 
@@ -357,25 +362,12 @@ static void rockchip_pd_detach_dev(struct generic_pm_domain *genpd,
 	pm_clk_destroy(dev);
 }
 
-static bool rockchip_active_wakeup(struct device *dev)
-{
-	struct generic_pm_domain *genpd;
-	struct rockchip_pm_domain *pd;
-
-	genpd = pd_to_genpd(dev->pm_domain);
-	pd = container_of(genpd, struct rockchip_pm_domain, genpd);
-
-	return pd->info->active_wakeup;
-}
-
 static int rockchip_pm_add_one_domain(struct rockchip_pmu *pmu,
 				      struct device_node *node)
 {
 	const struct rockchip_domain_info *pd_info;
 	struct rockchip_pm_domain *pd;
 	struct device_node *qos_node;
-	struct clk *clk;
-	int clk_cnt;
 	int i, j;
 	u32 id;
 	int error;
@@ -401,40 +393,40 @@ static int rockchip_pm_add_one_domain(struct rockchip_pmu *pmu,
 		return -EINVAL;
 	}
 
-	clk_cnt = of_count_phandle_with_args(node, "clocks", "#clock-cells");
-	pd = devm_kzalloc(pmu->dev,
-			  sizeof(*pd) + clk_cnt * sizeof(pd->clks[0]),
-			  GFP_KERNEL);
+	pd = devm_kzalloc(pmu->dev, sizeof(*pd), GFP_KERNEL);
 	if (!pd)
 		return -ENOMEM;
 
 	pd->info = pd_info;
 	pd->pmu = pmu;
 
-	for (i = 0; i < clk_cnt; i++) {
-		clk = of_clk_get(node, i);
-		if (IS_ERR(clk)) {
-			error = PTR_ERR(clk);
+	pd->num_clks = of_count_phandle_with_args(node, "clocks",
+						  "#clock-cells");
+	if (pd->num_clks > 0) {
+		pd->clks = devm_kcalloc(pmu->dev, pd->num_clks,
+					sizeof(*pd->clks), GFP_KERNEL);
+		if (!pd->clks)
+			return -ENOMEM;
+	} else {
+		dev_dbg(pmu->dev, "%s: doesn't have clocks: %d\n",
+			node->name, pd->num_clks);
+		pd->num_clks = 0;
+	}
+
+	for (i = 0; i < pd->num_clks; i++) {
+		pd->clks[i].clk = of_clk_get(node, i);
+		if (IS_ERR(pd->clks[i].clk)) {
+			error = PTR_ERR(pd->clks[i].clk);
 			dev_err(pmu->dev,
 				"%s: failed to get clk at index %d: %d\n",
 				node->name, i, error);
-			goto err_out;
+			return error;
 		}
-
-		error = clk_prepare(clk);
-		if (error) {
-			dev_err(pmu->dev,
-				"%s: failed to prepare clk %pC (index %d): %d\n",
-				node->name, clk, i, error);
-			clk_put(clk);
-			goto err_out;
-		}
-
-		pd->clks[pd->num_clks++] = clk;
-
-		dev_dbg(pmu->dev, "added clock '%pC' to domain '%s'\n",
-			clk, node->name);
 	}
+
+	error = clk_bulk_prepare(pd->num_clks, pd->clks);
+	if (error)
+		goto err_put_clocks;
 
 	pd->num_qos = of_count_phandle_with_args(node, "pm_qos",
 						 NULL);
@@ -445,7 +437,7 @@ static int rockchip_pm_add_one_domain(struct rockchip_pmu *pmu,
 					      GFP_KERNEL);
 		if (!pd->qos_regmap) {
 			error = -ENOMEM;
-			goto err_out;
+			goto err_unprepare_clocks;
 		}
 
 		for (j = 0; j < MAX_QOS_REGS_NUM; j++) {
@@ -455,7 +447,7 @@ static int rockchip_pm_add_one_domain(struct rockchip_pmu *pmu,
 							    GFP_KERNEL);
 			if (!pd->qos_save_regs[j]) {
 				error = -ENOMEM;
-				goto err_out;
+				goto err_unprepare_clocks;
 			}
 		}
 
@@ -463,13 +455,13 @@ static int rockchip_pm_add_one_domain(struct rockchip_pmu *pmu,
 			qos_node = of_parse_phandle(node, "pm_qos", j);
 			if (!qos_node) {
 				error = -ENODEV;
-				goto err_out;
+				goto err_unprepare_clocks;
 			}
 			pd->qos_regmap[j] = syscon_node_to_regmap(qos_node);
 			if (IS_ERR(pd->qos_regmap[j])) {
 				error = -ENODEV;
 				of_node_put(qos_node);
-				goto err_out;
+				goto err_unprepare_clocks;
 			}
 			of_node_put(qos_node);
 		}
@@ -480,7 +472,7 @@ static int rockchip_pm_add_one_domain(struct rockchip_pmu *pmu,
 		dev_err(pmu->dev,
 			"failed to power on domain '%s': %d\n",
 			node->name, error);
-		goto err_out;
+		goto err_unprepare_clocks;
 	}
 
 	pd->genpd.name = node->name;
@@ -488,24 +480,24 @@ static int rockchip_pm_add_one_domain(struct rockchip_pmu *pmu,
 	pd->genpd.power_on = rockchip_pd_power_on;
 	pd->genpd.attach_dev = rockchip_pd_attach_dev;
 	pd->genpd.detach_dev = rockchip_pd_detach_dev;
-	pd->genpd.dev_ops.active_wakeup = rockchip_active_wakeup;
 	pd->genpd.flags = GENPD_FLAG_PM_CLK;
+	if (pd_info->active_wakeup)
+		pd->genpd.flags |= GENPD_FLAG_ACTIVE_WAKEUP;
 	pm_genpd_init(&pd->genpd, NULL, false);
 
 	pmu->genpd_data.domains[id] = &pd->genpd;
 	return 0;
 
-err_out:
-	while (--i >= 0) {
-		clk_unprepare(pd->clks[i]);
-		clk_put(pd->clks[i]);
-	}
+err_unprepare_clocks:
+	clk_bulk_unprepare(pd->num_clks, pd->clks);
+err_put_clocks:
+	clk_bulk_put(pd->num_clks, pd->clks);
 	return error;
 }
 
 static void rockchip_pm_remove_one_domain(struct rockchip_pm_domain *pd)
 {
-	int i, ret;
+	int ret;
 
 	/*
 	 * We're in the error cleanup already, so we only complain,
@@ -516,10 +508,8 @@ static void rockchip_pm_remove_one_domain(struct rockchip_pm_domain *pd)
 		dev_err(pd->pmu->dev, "failed to remove domain '%s' : %d - state may be inconsistent\n",
 			pd->genpd.name, ret);
 
-	for (i = 0; i < pd->num_clks; i++) {
-		clk_unprepare(pd->clks[i]);
-		clk_put(pd->clks[i]);
-	}
+	clk_bulk_unprepare(pd->num_clks, pd->clks);
+	clk_bulk_put(pd->num_clks, pd->clks);
 
 	/* protect the zeroing of pm->num_clks */
 	mutex_lock(&pd->pmu->mutex);
@@ -730,6 +720,16 @@ static const struct rockchip_domain_info rk3328_pm_domains[] = {
 	[RK3328_PD_VPU]		= DOMAIN_RK3328(-1, 9, 9, false),
 };
 
+static const struct rockchip_domain_info rk3366_pm_domains[] = {
+	[RK3366_PD_PERI]	= DOMAIN_RK3368(10, 10, 6, true),
+	[RK3366_PD_VIO]		= DOMAIN_RK3368(14, 14, 8, false),
+	[RK3366_PD_VIDEO]	= DOMAIN_RK3368(13, 13, 7, false),
+	[RK3366_PD_RKVDEC]	= DOMAIN_RK3368(11, 11, 7, false),
+	[RK3366_PD_WIFIBT]	= DOMAIN_RK3368(8, 8, 9, false),
+	[RK3366_PD_VPU]		= DOMAIN_RK3368(12, 12, 7, false),
+	[RK3366_PD_GPU]		= DOMAIN_RK3368(15, 15, 2, false),
+};
+
 static const struct rockchip_domain_info rk3368_pm_domains[] = {
 	[RK3368_PD_PERI]	= DOMAIN_RK3368(13, 12, 6, true),
 	[RK3368_PD_VIO]		= DOMAIN_RK3368(15, 14, 8, false),
@@ -794,6 +794,23 @@ static const struct rockchip_pmu_info rk3328_pmu = {
 	.domain_info = rk3328_pm_domains,
 };
 
+static const struct rockchip_pmu_info rk3366_pmu = {
+	.pwr_offset = 0x0c,
+	.status_offset = 0x10,
+	.req_offset = 0x3c,
+	.idle_offset = 0x40,
+	.ack_offset = 0x40,
+
+	.core_pwrcnt_offset = 0x48,
+	.gpu_pwrcnt_offset = 0x50,
+
+	.core_power_transition_time = 24,
+	.gpu_power_transition_time = 24,
+
+	.num_domains = ARRAY_SIZE(rk3366_pm_domains),
+	.domain_info = rk3366_pm_domains,
+};
+
 static const struct rockchip_pmu_info rk3368_pmu = {
 	.pwr_offset = 0x0c,
 	.status_offset = 0x10,
@@ -832,6 +849,10 @@ static const struct of_device_id rockchip_pm_domain_dt_match[] = {
 	{
 		.compatible = "rockchip,rk3328-power-controller",
 		.data = (void *)&rk3328_pmu,
+	},
+	{
+		.compatible = "rockchip,rk3366-power-controller",
+		.data = (void *)&rk3366_pmu,
 	},
 	{
 		.compatible = "rockchip,rk3368-power-controller",

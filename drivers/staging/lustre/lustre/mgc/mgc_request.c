@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * GPL HEADER START
  *
@@ -39,12 +40,12 @@
 
 #include <linux/module.h>
 
-#include "../include/lprocfs_status.h"
-#include "../include/lustre_dlm.h"
-#include "../include/lustre_disk.h"
-#include "../include/lustre_log.h"
-#include "../include/lustre_swab.h"
-#include "../include/obd_class.h"
+#include <lprocfs_status.h>
+#include <lustre_dlm.h>
+#include <lustre_disk.h>
+#include <lustre_log.h>
+#include <lustre_swab.h>
+#include <obd_class.h>
 
 #include "mgc_internal.h"
 
@@ -288,7 +289,7 @@ config_log_add(struct obd_device *obd, char *logname,
 	struct config_llog_data *cld;
 	struct config_llog_data *sptlrpc_cld;
 	struct config_llog_data *params_cld;
-	bool locked = false;
+	struct config_llog_data *recover_cld = NULL;
 	char			seclogname[32];
 	char			*ptr;
 	int			rc;
@@ -333,20 +334,14 @@ config_log_add(struct obd_device *obd, char *logname,
 		goto out_params;
 	}
 
-	cld->cld_sptlrpc = sptlrpc_cld;
-	cld->cld_params = params_cld;
-
 	LASSERT(lsi->lsi_lmd);
 	if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOIR)) {
-		struct config_llog_data *recover_cld;
-
 		ptr = strrchr(seclogname, '-');
 		if (ptr) {
 			*ptr = 0;
 		} else {
 			CERROR("%s: sptlrpc log name not correct, %s: rc = %d\n",
 			       obd->obd_name, seclogname, -EINVAL);
-			config_log_put(cld);
 			rc = -EINVAL;
 			goto out_cld;
 		}
@@ -355,14 +350,10 @@ config_log_add(struct obd_device *obd, char *logname,
 			rc = PTR_ERR(recover_cld);
 			goto out_cld;
 		}
-
-		mutex_lock(&cld->cld_lock);
-		locked = true;
-		cld->cld_recover = recover_cld;
 	}
 
-	if (!locked)
-		mutex_lock(&cld->cld_lock);
+	mutex_lock(&cld->cld_lock);
+	cld->cld_recover = recover_cld;
 	cld->cld_params = params_cld;
 	cld->cld_sptlrpc = sptlrpc_cld;
 	mutex_unlock(&cld->cld_lock);
@@ -532,7 +523,7 @@ static void do_requeue(struct config_llog_data *cld)
  * in order to not flood the MGS.
  */
 #define MGC_TIMEOUT_MIN_SECONDS   5
-#define MGC_TIMEOUT_RAND_CENTISEC 0x1ff /* ~500 */
+#define MGC_TIMEOUT_RAND_CENTISEC 500
 
 static int mgc_requeue_thread(void *data)
 {
@@ -544,9 +535,8 @@ static int mgc_requeue_thread(void *data)
 	spin_lock(&config_list_lock);
 	rq_state |= RQ_RUNNING;
 	while (!(rq_state & RQ_STOP)) {
-		struct l_wait_info lwi;
 		struct config_llog_data *cld, *cld_prev;
-		int rand = cfs_rand() & MGC_TIMEOUT_RAND_CENTISEC;
+		int rand = prandom_u32_max(MGC_TIMEOUT_RAND_CENTISEC);
 		int to;
 
 		/* Any new or requeued lostlocks will change the state */
@@ -565,9 +555,9 @@ static int mgc_requeue_thread(void *data)
 		to = msecs_to_jiffies(MGC_TIMEOUT_MIN_SECONDS * MSEC_PER_SEC);
 		/* rand is centi-seconds */
 		to += msecs_to_jiffies(rand * MSEC_PER_SEC / 100);
-		lwi = LWI_TIMEOUT(to, NULL, NULL);
-		l_wait_event(rq_waitq, rq_state & (RQ_STOP | RQ_PRECLEANUP),
-			     &lwi);
+		wait_event_idle_timeout(rq_waitq,
+					rq_state & (RQ_STOP | RQ_PRECLEANUP),
+					to);
 
 		/*
 		 * iterate & processing through the list. for each cld, process
@@ -610,9 +600,7 @@ static int mgc_requeue_thread(void *data)
 			config_log_put(cld_prev);
 
 		/* Wait a bit to see if anyone else needs a requeue */
-		lwi = (struct l_wait_info) { 0 };
-		l_wait_event(rq_waitq, rq_state & (RQ_NOW | RQ_STOP),
-			     &lwi);
+		wait_event_idle(rq_waitq, rq_state & (RQ_NOW | RQ_STOP));
 		spin_lock(&config_list_lock);
 	}
 
@@ -1165,6 +1153,7 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 		char *cname;
 		char *params;
 		char *uuid;
+		size_t len;
 
 		rc = -EINVAL;
 		if (datalen < sizeof(*entry))
@@ -1293,17 +1282,19 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 		lustre_cfg_bufs_set_string(&bufs, 1, params);
 
 		rc = -ENOMEM;
-		lcfg = lustre_cfg_new(LCFG_PARAM, &bufs);
-		if (IS_ERR(lcfg)) {
-			CERROR("mgc: cannot allocate memory\n");
+		len = lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen);
+		lcfg = kzalloc(len, GFP_NOFS);
+		if (!lcfg) {
+			rc = -ENOMEM;
 			break;
 		}
+		lustre_cfg_init(lcfg, LCFG_PARAM, &bufs);
 
 		CDEBUG(D_INFO, "ir apply logs %lld/%lld for %s -> %s\n",
 		       prev_version, max_version, obdname, params);
 
 		rc = class_process_config(lcfg);
-		lustre_cfg_free(lcfg);
+		kfree(lcfg);
 		if (rc)
 			CDEBUG(D_INFO, "process config for %s error %d\n",
 			       obdname, rc);
@@ -1636,9 +1627,7 @@ restart:
 
 		if (rcl == -ESHUTDOWN &&
 		    atomic_read(&mgc->u.cli.cl_mgc_refcount) > 0 && !retry) {
-			int secs = cfs_time_seconds(obd_timeout);
 			struct obd_import *imp;
-			struct l_wait_info lwi;
 
 			mutex_unlock(&cld->cld_lock);
 			imp = class_exp2cliimp(mgc->u.cli.cl_mgc_mgsexp);
@@ -1653,9 +1642,9 @@ restart:
 			 */
 			ptlrpc_pinger_force(imp);
 
-			lwi = LWI_TIMEOUT(secs, NULL, NULL);
-			l_wait_event(imp->imp_recovery_waitq,
-				     !mgc_import_in_recovery(imp), &lwi);
+			wait_event_idle_timeout(imp->imp_recovery_waitq,
+						!mgc_import_in_recovery(imp),
+						obd_timeout * HZ);
 
 			if (imp->imp_state == LUSTRE_IMP_FULL) {
 				retry = true;

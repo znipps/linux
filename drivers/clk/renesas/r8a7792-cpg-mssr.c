@@ -98,6 +98,7 @@ static const struct mssr_mod_clk r8a7792_mod_clks[] __initconst = {
 	DEF_MOD("tpu0",			 304,	R8A7792_CLK_CP),
 	DEF_MOD("sdhi0",		 314,	R8A7792_CLK_SD),
 	DEF_MOD("cmt1",			 329,	R8A7792_CLK_R),
+	DEF_MOD("rwdt",			 402,	R8A7792_CLK_R),
 	DEF_MOD("irqc",			 407,	R8A7792_CLK_CP),
 	DEF_MOD("intc-sys",		 408,	R8A7792_CLK_ZS),
 	DEF_MOD("audio-dmac0",		 502,	R8A7792_CLK_HP),
@@ -118,6 +119,13 @@ static const struct mssr_mod_clk r8a7792_mod_clks[] __initconst = {
 	DEF_MOD("vin1",			 810,	R8A7792_CLK_ZG),
 	DEF_MOD("vin0",			 811,	R8A7792_CLK_ZG),
 	DEF_MOD("etheravb",		 812,	R8A7792_CLK_HP),
+	DEF_MOD("imr-lx3",		 821,	R8A7792_CLK_ZG),
+	DEF_MOD("imr-lsx3-1",		 822,	R8A7792_CLK_ZG),
+	DEF_MOD("imr-lsx3-0",		 823,	R8A7792_CLK_ZG),
+	DEF_MOD("imr-lsx3-5",		 825,	R8A7792_CLK_ZG),
+	DEF_MOD("imr-lsx3-4",		 826,	R8A7792_CLK_ZG),
+	DEF_MOD("imr-lsx3-3",		 827,	R8A7792_CLK_ZG),
+	DEF_MOD("imr-lsx3-2",		 828,	R8A7792_CLK_ZG),
 	DEF_MOD("gyro-adc",		 901,	R8A7792_CLK_P),
 	DEF_MOD("gpio7",		 904,	R8A7792_CLK_CP),
 	DEF_MOD("gpio6",		 905,	R8A7792_CLK_CP),
@@ -147,6 +155,7 @@ static const struct mssr_mod_clk r8a7792_mod_clks[] __initconst = {
 };
 
 static const unsigned int r8a7792_crit_mod_clks[] __initconst = {
+	MOD_CLK_ID(402),	/* RWDT */
 	MOD_CLK_ID(408),	/* INTC-SYS (GIC) */
 };
 

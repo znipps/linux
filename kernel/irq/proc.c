@@ -1,6 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * linux/kernel/irq/proc.c
- *
  * Copyright (C) 1992, 1998-2004 Linus Torvalds, Ingo Molnar
  *
  * This file contains the /proc/irq/ handling code.
@@ -61,12 +60,12 @@ static int show_irq_affinity(int type, struct seq_file *m)
 	case EFFECTIVE:
 	case EFFECTIVE_LIST:
 #ifdef CONFIG_GENERIC_IRQ_EFFECTIVE_AFF_MASK
-		mask = desc->irq_common_data.effective_affinity;
+		mask = irq_data_get_effective_affinity_mask(&desc->irq_data);
 		break;
-#else
-		return -EINVAL;
 #endif
-	};
+	default:
+		return -EINVAL;
+	}
 
 	switch (type) {
 	case AFFINITY_LIST:
@@ -154,8 +153,9 @@ static ssize_t write_irq_affinity(int type, struct file *file,
 		 */
 		err = irq_select_affinity_usr(irq) ? -EINVAL : count;
 	} else {
-		irq_set_affinity(irq, new_value);
-		err = count;
+		err = irq_set_affinity(irq, new_value);
+		if (!err)
+			err = count;
 	}
 
 free_cpumask:

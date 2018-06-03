@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * GPL HEADER START
  *
@@ -38,14 +39,11 @@
 
 #define DEBUG_SUBSYSTEM S_LOV
 
-#include "../include/lustre/lustre_idl.h"
-#include "../include/lustre/lustre_user.h"
-
-#include "../include/lustre_net.h"
-#include "../include/lustre_swab.h"
-#include "../include/obd.h"
-#include "../include/obd_class.h"
-#include "../include/obd_support.h"
+#include <lustre_net.h>
+#include <lustre_swab.h>
+#include <obd.h>
+#include <obd_class.h>
+#include <obd_support.h>
 
 #include "lov_cl_internal.h"
 #include "lov_internal.h"
@@ -335,7 +333,7 @@ int lov_getstripe(struct lov_object *obj, struct lov_stripe_md *lsm,
 	lmmk_size = lov_mds_md_size(stripe_count, lsm->lsm_magic);
 
 
-	lmmk = libcfs_kvzalloc(lmmk_size, GFP_NOFS);
+	lmmk = kvzalloc(lmmk_size, GFP_NOFS);
 	if (!lmmk) {
 		rc = -ENOMEM;
 		goto out;

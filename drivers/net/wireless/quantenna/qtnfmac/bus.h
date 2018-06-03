@@ -59,8 +59,9 @@ struct qtnf_bus {
 	char fwname[32];
 	struct napi_struct mux_napi;
 	struct net_device mux_dev;
-	struct completion request_firmware_complete;
+	struct completion firmware_init_complete;
 	struct workqueue_struct *workqueue;
+	struct work_struct fw_work;
 	struct work_struct event_work;
 	struct mutex bus_lock; /* lock during command/event processing */
 	struct dentry *dbg_dir;
@@ -130,7 +131,6 @@ static __always_inline void qtnf_bus_unlock(struct qtnf_bus *bus)
 
 /* interface functions from common layer */
 
-void qtnf_rx_frame(struct device *dev, struct sk_buff *rxp);
 int qtnf_core_attach(struct qtnf_bus *bus);
 void qtnf_core_detach(struct qtnf_bus *bus);
 void qtnf_txflowblock(struct device *dev, bool state);

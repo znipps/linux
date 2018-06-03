@@ -83,6 +83,7 @@ drm_plane_state_to_atmel_hlcdc_plane_state(struct drm_plane_state *s)
 #define SUBPIXEL_MASK			0xffff
 
 static uint32_t rgb_formats[] = {
+	DRM_FORMAT_C8,
 	DRM_FORMAT_XRGB4444,
 	DRM_FORMAT_ARGB4444,
 	DRM_FORMAT_RGBA4444,
@@ -100,6 +101,7 @@ struct atmel_hlcdc_formats atmel_hlcdc_plane_rgb_formats = {
 };
 
 static uint32_t rgb_and_yuv_formats[] = {
+	DRM_FORMAT_C8,
 	DRM_FORMAT_XRGB4444,
 	DRM_FORMAT_ARGB4444,
 	DRM_FORMAT_RGBA4444,
@@ -128,6 +130,9 @@ struct atmel_hlcdc_formats atmel_hlcdc_plane_rgb_and_yuv_formats = {
 static int atmel_hlcdc_format_to_plane_mode(u32 format, u32 *mode)
 {
 	switch (format) {
+	case DRM_FORMAT_C8:
+		*mode = ATMEL_HLCDC_C8_MODE;
+		break;
 	case DRM_FORMAT_XRGB4444:
 		*mode = ATMEL_HLCDC_XRGB4444_MODE;
 		break;
@@ -187,20 +192,6 @@ static int atmel_hlcdc_format_to_plane_mode(u32 format, u32 *mode)
 	}
 
 	return 0;
-}
-
-static bool atmel_hlcdc_format_embeds_alpha(u32 format)
-{
-	int i;
-
-	for (i = 0; i < sizeof(format); i++) {
-		char tmp = (format >> (8 * i)) & 0xff;
-
-		if (tmp == 'A')
-			return true;
-	}
-
-	return false;
 }
 
 static u32 heo_downscaling_xcoef[] = {
@@ -372,13 +363,13 @@ atmel_hlcdc_plane_update_general_settings(struct atmel_hlcdc_plane *plane,
 {
 	unsigned int cfg = ATMEL_HLCDC_LAYER_DMA_BLEN_INCR16 | state->ahb_id;
 	const struct atmel_hlcdc_layer_desc *desc = plane->layer.desc;
-	u32 format = state->base.fb->format->format;
+	const struct drm_format_info *format = state->base.fb->format;
 
 	/*
 	 * Rotation optimization is not working on RGB888 (rotation is still
 	 * working but without any optimization).
 	 */
-	if (format == DRM_FORMAT_RGB888)
+	if (format->format == DRM_FORMAT_RGB888)
 		cfg |= ATMEL_HLCDC_LAYER_DMA_ROTDIS;
 
 	atmel_hlcdc_layer_write_cfg(&plane->layer, ATMEL_HLCDC_LAYER_DMA_CFG,
@@ -390,7 +381,7 @@ atmel_hlcdc_plane_update_general_settings(struct atmel_hlcdc_plane *plane,
 		cfg |= ATMEL_HLCDC_LAYER_OVR | ATMEL_HLCDC_LAYER_ITER2BL |
 		       ATMEL_HLCDC_LAYER_ITER;
 
-		if (atmel_hlcdc_format_embeds_alpha(format))
+		if (format->has_alpha)
 			cfg |= ATMEL_HLCDC_LAYER_LAEN;
 		else
 			cfg |= ATMEL_HLCDC_LAYER_GAEN |
@@ -422,6 +413,29 @@ static void atmel_hlcdc_plane_update_format(struct atmel_hlcdc_plane *plane,
 
 	atmel_hlcdc_layer_write_cfg(&plane->layer,
 				    ATMEL_HLCDC_LAYER_FORMAT_CFG, cfg);
+}
+
+static void atmel_hlcdc_plane_update_clut(struct atmel_hlcdc_plane *plane)
+{
+	struct drm_crtc *crtc = plane->base.crtc;
+	struct drm_color_lut *lut;
+	int idx;
+
+	if (!crtc || !crtc->state)
+		return;
+
+	if (!crtc->state->color_mgmt_changed || !crtc->state->gamma_lut)
+		return;
+
+	lut = (struct drm_color_lut *)crtc->state->gamma_lut->data;
+
+	for (idx = 0; idx < ATMEL_HLCDC_CLUT_SIZE; idx++, lut++) {
+		u32 val = ((lut->red << 8) & 0xff0000) |
+			(lut->green & 0xff00) |
+			(lut->blue >> 8);
+
+		atmel_hlcdc_layer_write_clut(&plane->layer, idx, val);
+	}
 }
 
 static void atmel_hlcdc_plane_update_buffers(struct atmel_hlcdc_plane *plane,
@@ -538,7 +552,7 @@ atmel_hlcdc_plane_prepare_disc_area(struct drm_crtc_state *c_state)
 		ovl_state = drm_plane_state_to_atmel_hlcdc_plane_state(ovl_s);
 
 		if (!ovl_s->fb ||
-		    atmel_hlcdc_format_embeds_alpha(ovl_s->fb->format->format) ||
+		    ovl_s->fb->format->has_alpha ||
 		    ovl_state->alpha != 255)
 			continue;
 
@@ -741,7 +755,7 @@ static int atmel_hlcdc_plane_atomic_check(struct drm_plane *p,
 
 	if ((state->crtc_h != state->src_h || state->crtc_w != state->src_w) &&
 	    (!desc->layout.memsize ||
-	     atmel_hlcdc_format_embeds_alpha(state->base.fb->format->format)))
+	     state->base.fb->format->has_alpha))
 		return -EINVAL;
 
 	if (state->crtc_x < 0 || state->crtc_y < 0)
@@ -768,6 +782,7 @@ static void atmel_hlcdc_plane_atomic_update(struct drm_plane *p,
 	atmel_hlcdc_plane_update_pos_and_size(plane, state);
 	atmel_hlcdc_plane_update_general_settings(plane, state);
 	atmel_hlcdc_plane_update_format(plane, state);
+	atmel_hlcdc_plane_update_clut(plane);
 	atmel_hlcdc_plane_update_buffers(plane, state);
 	atmel_hlcdc_plane_update_disc_area(plane, state);
 
@@ -809,7 +824,7 @@ static void atmel_hlcdc_plane_destroy(struct drm_plane *p)
 	struct atmel_hlcdc_plane *plane = drm_plane_to_atmel_hlcdc_plane(p);
 
 	if (plane->base.fb)
-		drm_framebuffer_unreference(plane->base.fb);
+		drm_framebuffer_put(plane->base.fb);
 
 	drm_plane_cleanup(p);
 }
@@ -911,7 +926,7 @@ void atmel_hlcdc_plane_irq(struct atmel_hlcdc_plane *plane)
 			desc->name);
 }
 
-static struct drm_plane_helper_funcs atmel_hlcdc_layer_plane_helper_funcs = {
+static const struct drm_plane_helper_funcs atmel_hlcdc_layer_plane_helper_funcs = {
 	.atomic_check = atmel_hlcdc_plane_atomic_check,
 	.atomic_update = atmel_hlcdc_plane_atomic_update,
 	.atomic_disable = atmel_hlcdc_plane_atomic_disable,
@@ -958,7 +973,7 @@ static void atmel_hlcdc_plane_reset(struct drm_plane *p)
 		state = drm_plane_state_to_atmel_hlcdc_plane_state(p->state);
 
 		if (state->base.fb)
-			drm_framebuffer_unreference(state->base.fb);
+			drm_framebuffer_put(state->base.fb);
 
 		kfree(state);
 		p->state = NULL;
@@ -996,7 +1011,7 @@ atmel_hlcdc_plane_atomic_duplicate_state(struct drm_plane *p)
 	}
 
 	if (copy->base.fb)
-		drm_framebuffer_reference(copy->base.fb);
+		drm_framebuffer_get(copy->base.fb);
 
 	return &copy->base;
 }
@@ -1015,15 +1030,14 @@ static void atmel_hlcdc_plane_atomic_destroy_state(struct drm_plane *p,
 	}
 
 	if (s->fb)
-		drm_framebuffer_unreference(s->fb);
+		drm_framebuffer_put(s->fb);
 
 	kfree(state);
 }
 
-static struct drm_plane_funcs layer_plane_funcs = {
+static const struct drm_plane_funcs layer_plane_funcs = {
 	.update_plane = drm_atomic_helper_update_plane,
 	.disable_plane = drm_atomic_helper_disable_plane,
-	.set_property = drm_atomic_helper_plane_set_property,
 	.destroy = atmel_hlcdc_plane_destroy,
 	.reset = atmel_hlcdc_plane_reset,
 	.atomic_duplicate_state = atmel_hlcdc_plane_atomic_duplicate_state,
@@ -1058,7 +1072,8 @@ static int atmel_hlcdc_plane_create(struct drm_device *dev,
 	ret = drm_universal_plane_init(dev, &plane->base, 0,
 				       &layer_plane_funcs,
 				       desc->formats->formats,
-				       desc->formats->nformats, type, NULL);
+				       desc->formats->nformats,
+				       NULL, type, NULL);
 	if (ret)
 		return ret;
 
