@@ -1,13 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Packet matching code.
  *
  * Copyright (C) 1999 Paul `Rusty' Russell & Michael J. Neuling
  * Copyright (C) 2000-2005 Netfilter Core Team <coreteam@netfilter.org>
  * Copyright (c) 2006-2010 Patrick McHardy <kaber@trash.net>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
@@ -529,7 +526,6 @@ static int check_target(struct ip6t_entry *e, struct net *net, const char *name)
 		.family    = NFPROTO_IPV6,
 	};
 
-	t = ip6t_get_target(e);
 	return xt_check_target(&par, t->u.target_size - sizeof(*t),
 			       e->ipv6.proto,
 			       e->ipv6.invflags & IP6T_INV_PROTO);
@@ -551,6 +547,7 @@ find_check_entry(struct ip6t_entry *e, struct net *net, const char *name,
 		return -ENOMEM;
 
 	j = 0;
+	memset(&mtpar, 0, sizeof(mtpar));
 	mtpar.net	= net;
 	mtpar.table     = name;
 	mtpar.entryinfo = &e->ipv6;
@@ -1794,6 +1791,8 @@ int ip6t_register_table(struct net *net, const struct xt_table *table,
 
 	/* set res now, will see skbs right after nf_register_net_hooks */
 	WRITE_ONCE(*res, new_table);
+	if (!ops)
+		return 0;
 
 	ret = nf_register_net_hooks(net, ops, hweight32(table->valid_hooks));
 	if (ret != 0) {
@@ -1811,7 +1810,8 @@ out_free:
 void ip6t_unregister_table(struct net *net, struct xt_table *table,
 			   const struct nf_hook_ops *ops)
 {
-	nf_unregister_net_hooks(net, ops, hweight32(table->valid_hooks));
+	if (ops)
+		nf_unregister_net_hooks(net, ops, hweight32(table->valid_hooks));
 	__ip6t_unregister_table(net, table);
 }
 
@@ -1906,6 +1906,7 @@ static struct xt_match ip6t_builtin_mt[] __read_mostly = {
 		.checkentry = icmp6_checkentry,
 		.proto      = IPPROTO_ICMPV6,
 		.family     = NFPROTO_IPV6,
+		.me	    = THIS_MODULE,
 	},
 };
 

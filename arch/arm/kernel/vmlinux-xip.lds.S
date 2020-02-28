@@ -13,6 +13,7 @@
 #include <asm/cache.h>
 #include <asm/thread_info.h>
 #include <asm/memory.h>
+#include <asm/mpu.h>
 #include <asm/page.h>
 
 #include "vmlinux.lds.h"
@@ -69,8 +70,6 @@ SECTIONS
 	ARM_UNWIND_SECTIONS
 #endif
 
-	NOTES
-
 	_etext = .;			/* End of text and rodata section */
 
 	ARM_VECTORS
@@ -95,7 +94,6 @@ SECTIONS
 		INIT_SETUP(16)
 		INIT_CALLS
 		CON_INITCALL
-		SECURITY_INITCALL
 		INIT_RAM_FS
 	}
 
@@ -114,7 +112,7 @@ SECTIONS
 
 	. = ALIGN(THREAD_SIZE);
 	_sdata = .;
-	RW_DATA_SECTION(L1_CACHE_BYTES, PAGE_SIZE, THREAD_SIZE)
+	RW_DATA(L1_CACHE_BYTES, PAGE_SIZE, THREAD_SIZE)
 	.data.ro_after_init : AT(ADDR(.data.ro_after_init) - LOAD_OFFSET) {
 		*(.data..ro_after_init)
 	}
@@ -148,6 +146,9 @@ SECTIONS
 	__init_end = .;
 
 	BSS_SECTION(0, 0, 8)
+#ifdef CONFIG_ARM_MPU
+	. = ALIGN(PMSAv8_MINALIGN);
+#endif
 	_end = .;
 
 	STABS_DEBUG
